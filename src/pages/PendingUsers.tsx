@@ -1,0 +1,928 @@
+import { useState, useMemo, useEffect } from 'react'
+import { useUsersData } from '../hooks/useUsersData'
+import { supabase } from '../lib/supabaseClient'
+import { sendProviderRejectionEmail, sendProviderApprovalEmail } from '../services/email'
+import { useToast } from '../components/ui/use-toast'
+import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+
+function PendingUsers() {
+  const { data: users, loading, error, refetch } = useUsersData()
+  const { toast } = useToast()
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const [processing, setProcessing] = useState<string | null>(null)
+  const [rejecting, setRejecting] = useState<string | null>(null)
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [userToReject, setUserToReject] = useState<string | null>(null)
+  const [showFilters, setShowFilters] = useState(false)
+  const [filters, setFilters] = useState({
+    missingPoliceClearance: false,
+    missingProfessionalCredential: false,
+    hasDocuments: false,
+  })
+
+  const pendingProviders = useMemo(() => {
+    // Solo mostrar proveedores que:
+    // 1. Son proveedores y no están validados
+    // 2. Tienen al menos un documento subido (para que no aparezcan los rechazados que aún no han vuelto a subir)
+    let filtered = users.filter(
+      (user) =>
+        user.is_provider &&
+        !user.is_validated &&
+        (user.police_clearance_pic || user.professional_credential_pic),
+    )
+
+    if (filters.missingPoliceClearance) {
+      filtered = filtered.filter(
+        (user) => !user.police_clearance_pic || !user.police_clearance_verified,
+      )
+    }
+
+    if (filters.missingProfessionalCredential) {
+      filtered = filtered.filter(
+        (user) => !user.professional_credential_pic || !user.professional_credential_verified,
+      )
+    }
+
+    if (filters.hasDocuments) {
+      filtered = filtered.filter(
+        (user) => user.police_clearance_pic || user.professional_credential_pic,
+      )
+    }
+
+    return filtered
+  }, [users, filters])
+
+  const selectedUser = useMemo(
+    () => pendingProviders.find((u) => u.id === selectedUserId),
+    [pendingProviders, selectedUserId],
+  )
+
+  // Aprobar automáticamente proveedores con más de 7 días
+  useEffect(() => {
+    const autoApproveOldProviders = async () => {
+      if (loading || users.length === 0) return
+
+      const sevenDaysAgo = new Date()
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+
+      // Encontrar proveedores pendientes con más de 7 días
+      const providersToAutoApprove = users.filter((user) => {
+        if (!user.is_provider || user.is_validated) return false
+        if (!user.created_at) return false
+
+        const createdAt = new Date(user.created_at)
+        const daysSinceCreation = Math.floor(
+          (Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24),
+        )
+
+        // Aprobar si tiene más de 7 días y tiene documentos subidos
+        return (
+          daysSinceCreation >= 7 &&
+          (user.police_clearance_pic || user.professional_credential_pic)
+        )
+      })
+
+      if (providersToAutoApprove.length === 0) return
+
+      console.log(
+        `Encontrados ${providersToAutoApprove.length} proveedores para aprobar automáticamente (más de 7 días)`,
+      )
+
+      // Aprobar cada proveedor
+      for (const user of providersToAutoApprove) {
+        try {
+          console.log(`Aprobando automáticamente a ${user.name} ${user.last_name} (${user.id})`)
+
+          // Actualizar estado
+          const { error: updateError } = await supabase
+            .from('users')
+            .update({ is_validated: true })
+            .eq('id', user.id)
+
+          if (updateError) {
+            console.error(
+              `Error al aprobar automáticamente a ${user.id}:`,
+              updateError,
+            )
+            continue
+          }
+
+          // Enviar email de aprobación
+          try {
+            await sendProviderApprovalEmail({
+              to: user.email,
+              toName: `${user.name} ${user.last_name}`,
+            })
+            console.log(`Email de aprobación enviado a ${user.email}`)
+          } catch (emailError) {
+            console.error(
+              `Error al enviar email de aprobación a ${user.email}:`,
+              emailError,
+            )
+            // Continuar aunque falle el email
+          }
+        } catch (error) {
+          console.error(
+            `Error al procesar aprobación automática de ${user.id}:`,
+            error,
+          )
+        }
+      }
+
+      // Recargar datos después de aprobar
+      if (providersToAutoApprove.length > 0) {
+        await refetch()
+        toast({
+          title: 'Aprobación automática',
+          description: `Se aprobaron automáticamente ${providersToAutoApprove.length} proveedor(es) con más de 7 días pendientes.`,
+        })
+      }
+    }
+
+    autoApproveOldProviders()
+  }, [users, loading, refetch, toast])
+
+  const handleApprove = async (userId: string) => {
+    setProcessing(userId)
+    try {
+      const user = users.find((u) => u.id === userId)
+      if (!user) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "No se encontró el usuario.",
+        })
+        setProcessing(null)
+        return
+      }
+
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ is_validated: true })
+        .eq('id', userId)
+
+      if (updateError) {
+        toast({
+          variant: "destructive",
+          title: "Error al aprobar",
+          description: updateError.message,
+        })
+        setProcessing(null)
+        return
+      }
+
+      // Enviar email de aprobación
+      try {
+        await sendProviderApprovalEmail({
+          to: user.email,
+          toName: `${user.name} ${user.last_name}`,
+        })
+      } catch (emailError) {
+        console.error('Error al enviar email de aprobación:', emailError)
+        toast({
+          variant: "destructive",
+          title: "Error al enviar email",
+          description: emailError instanceof Error ? emailError.message : 'Error desconocido',
+        })
+      }
+
+      await refetch()
+      setSelectedUserId(null)
+      toast({
+        title: "Proveedor aprobado",
+        description: "El proveedor ha sido aprobado exitosamente y se le ha enviado un email de notificación.",
+      })
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: err instanceof Error ? err.message : 'Error desconocido',
+      })
+    } finally {
+      setProcessing(null)
+    }
+  }
+
+  const handleRejectClick = (userId: string) => {
+    setUserToReject(userId)
+    setShowConfirmDialog(true)
+  }
+
+  const handleReject = async () => {
+    if (!userToReject) return
+
+    const user = users.find((u) => u.id === userToReject)
+    if (!user) return
+
+    setShowConfirmDialog(false)
+    setRejecting(userToReject)
+    setProcessing(userToReject)
+    try {
+      // Verificar si tiene categorías profesionales
+      const professionalCategoryNames = [
+        'Abogados y Notarios',
+        'Contadores',
+        'Traductores',
+        'Diseño Gráfico',
+        'Programador Freelance',
+        'Community Manager',
+        'Veterinarios',
+        'Médicos Generales',
+        'Médicos Especialistas',
+      ]
+
+      const hasProfessionalCategories =
+        user.serviceCategories?.some((cat) =>
+          professionalCategoryNames.includes(cat.category),
+        ) || false
+
+      // Determinar qué documentos faltan
+      const missingDocuments = {
+        police_clearance: !user.police_clearance_pic || !user.police_clearance_verified,
+        // Solo requerir credencial profesional si tiene categorías profesionales
+        professional_credential:
+          hasProfessionalCategories &&
+          (!user.professional_credential_pic || !user.professional_credential_verified),
+      }
+
+      // Actualizar estado del usuario:
+      // - Marcar como no validado
+      // - Limpiar documentos para que desaparezca de la lista hasta que vuelva a subirlos
+      // - Resetear verificaciones
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          is_validated: false,
+          is_banned: false,
+          police_clearance_pic: null,
+          police_clearance_verified: false,
+          professional_credential_pic: null,
+          professional_credential_verified: false,
+        })
+        .eq('id', userToReject)
+
+      if (updateError) {
+        toast({
+          variant: "destructive",
+          title: "Error al rechazar",
+          description: updateError.message,
+        })
+        setRejecting(null)
+        return
+      }
+
+      // Enviar email de rechazo
+      try {
+        if (!user.id) {
+          throw new Error("El ID del usuario no está disponible")
+        }
+        
+        console.log("Enviando email de rechazo para usuario:", user.id, user.email)
+        
+        await sendProviderRejectionEmail({
+          to: user.email,
+          toName: `${user.name} ${user.last_name}`,
+          missingDocuments,
+          userId: user.id,
+        })
+      } catch (emailError) {
+        console.error('Error al enviar email:', emailError)
+        toast({
+          variant: "destructive",
+          title: "Error al enviar email",
+          description: emailError instanceof Error ? emailError.message : 'Error desconocido',
+        })
+      }
+
+      // Esperar un poco para que se vea el feedback visual
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      await refetch()
+      setSelectedUserId(null)
+      toast({
+        title: "Proveedor rechazado",
+        description: "Se ha enviado un email con instrucciones al proveedor.",
+      })
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: err instanceof Error ? err.message : 'Error desconocido',
+      })
+    } finally {
+      setProcessing(null)
+      // Mantener el estado de rechazando un poco más para el feedback visual
+      setTimeout(() => {
+        setRejecting(null)
+      }, 1000)
+    }
+  }
+
+  const handleVerifyDocument = async (
+    userId: string,
+    documentType: 'police_clearance' | 'professional_credential',
+  ) => {
+    setProcessing(userId)
+    try {
+      const updateField =
+        documentType === 'police_clearance'
+          ? { police_clearance_verified: true }
+          : { professional_credential_verified: true }
+
+      const { error: updateError } = await supabase
+        .from('users')
+        .update(updateField)
+        .eq('id', userId)
+
+      if (updateError) {
+        toast({
+          variant: "destructive",
+          title: "Error al verificar documento",
+          description: updateError.message,
+        })
+      } else {
+        await refetch()
+        toast({
+          title: "Documento verificado",
+          description: "El documento ha sido marcado como verificado.",
+        })
+      }
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: err instanceof Error ? err.message : 'Error desconocido',
+      })
+    } finally {
+      setProcessing(null)
+    }
+  }
+
+  const handleExport = () => {
+    const csvHeaders = [
+      'Nombre',
+      'Apellido',
+      'Email',
+      'Ubicación',
+      'Fecha de registro',
+      'Categorías',
+      'Solvencia Policial',
+      'Credencial Profesional',
+    ]
+
+    const csvRows = pendingProviders.map((user) => {
+      const categories = user.serviceCategories
+        ? user.serviceCategories
+            .map((cat) => `${cat.category}${cat.subcategories?.length ? ` (${cat.subcategories.join(', ')})` : ''}`)
+            .join('; ')
+        : 'Sin categorías'
+
+      return [
+        user.name || '',
+        user.last_name || '',
+        user.email || '',
+        user.location || 'Sin ubicación',
+        new Date(user.created_at).toLocaleDateString('es-AR'),
+        categories,
+        user.police_clearance_verified ? 'Verificada' : user.police_clearance_pic ? 'Pendiente' : 'Falta',
+        user.professional_credential_verified ? 'Verificada' : user.professional_credential_pic ? 'Pendiente' : 'Falta',
+      ]
+    })
+
+    const csvContent = [csvHeaders, ...csvRows]
+      .map((row) => row.map((cell) => `"${cell}"`).join(','))
+      .join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `proveedores_pendientes_${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  return (
+    <div className="space-y-8 text-slate-900">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-semibold">Usuarios pendientes de aprobación</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Datos reales: proveedores marcados con `is_provider=true` e
+            `is_validated=false` dentro de Supabase.
+          </p>
+        </div>
+        <button
+          onClick={refetch}
+          className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+        >
+          Actualizar
+        </button>
+      </header>
+
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      <section className="rounded-3xl border border-amber-100 bg-amber-50/70 p-6 shadow-lg">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.3em] text-amber-500">Prioridad</p>
+            <h3 className="text-lg font-semibold text-amber-900">
+              {loading ? '—' : `${pendingProviders.length} pendientes por validar`}
+            </h3>
+          </div>
+          <span className="rounded-full bg-white/70 px-4 py-2 text-xs font-semibold text-amber-800">
+            {users.filter((user) => user.is_provider).length} proveedores totales
+          </span>
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-white/70 bg-white/90 p-6 shadow-lg">
+        <header className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Detalle de aplicaciones</h3>
+            <p className="text-sm text-slate-500">
+              {pendingProviders.length} proveedor{pendingProviders.length !== 1 ? 'es' : ''} pendiente{pendingProviders.length !== 1 ? 's' : ''}
+              {Object.values(filters).some((f) => f) && ' (filtrados)'}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <div className="relative">
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Filtros {showFilters ? '▲' : '▼'}
+              </button>
+              {showFilters && (
+                <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-4 shadow-lg z-10">
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={filters.missingPoliceClearance}
+                        onChange={(e) =>
+                          setFilters({ ...filters, missingPoliceClearance: e.target.checked })
+                        }
+                        className="rounded border-slate-300"
+                      />
+                      <span className="text-sm text-slate-700">Falta solvencia policial</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={filters.missingProfessionalCredential}
+                        onChange={(e) =>
+                          setFilters({ ...filters, missingProfessionalCredential: e.target.checked })
+                        }
+                        className="rounded border-slate-300"
+                      />
+                      <span className="text-sm text-slate-700">Falta credencial profesional</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={filters.hasDocuments}
+                        onChange={(e) => setFilters({ ...filters, hasDocuments: e.target.checked })}
+                        className="rounded border-slate-300"
+                      />
+                      <span className="text-sm text-slate-700">Tiene documentos subidos</span>
+                    </label>
+                    <button
+                      onClick={() => {
+                        setFilters({
+                          missingPoliceClearance: false,
+                          missingProfessionalCredential: false,
+                          hasDocuments: false,
+                        })
+                        setShowFilters(false)
+                      }}
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    >
+                      Limpiar filtros
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={handleExport}
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Exportar
+            </button>
+          </div>
+        </header>
+
+        <div className="mt-6 space-y-4">
+          {loading && <p className="text-sm text-slate-500">Cargando pendientes…</p>}
+          {!loading && pendingProviders.length === 0 && (
+            <p className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-800">
+              ¡Todos los proveedores están validados!
+            </p>
+          )}
+          {pendingProviders.map((professional) => {
+            const isRejecting = rejecting === professional.id
+            const isProcessing = processing === professional.id
+            
+            return (
+            <article
+              key={professional.id}
+              className={`rounded-2xl border p-4 shadow-sm transition-all duration-300 ${
+                isRejecting
+                  ? 'border-red-300 bg-red-50/50 animate-pulse'
+                  : 'border-slate-100 bg-slate-50'
+              }`}
+            >
+              {isRejecting && (
+                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-red-600 border-t-transparent"></div>
+                  <p className="text-sm font-semibold text-red-700">
+                    Rechazando proveedor y enviando email...
+                  </p>
+                </div>
+              )}
+              
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex-1">
+                  <p className="text-lg font-semibold text-slate-900">
+                    {professional.name} {professional.last_name}
+                  </p>
+                  <p className="text-sm text-slate-500">
+                    {professional.serviceCategories && professional.serviceCategories.length > 0
+                      ? professional.serviceCategories
+                          .map(
+                            (cat) =>
+                              `${cat.category}${cat.subcategories && cat.subcategories.length > 0 ? ` (${cat.subcategories.join(', ')})` : ''}`,
+                          )
+                          .join(' • ')
+                      : 'Categoría sin definir'}
+                  </p>
+                </div>
+                <div className="text-right text-xs text-slate-500">
+                  Alta {new Date(professional.created_at).toLocaleDateString('es-AR')}
+                </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                <span className="rounded-full bg-white px-3 py-1 font-semibold text-slate-600">
+                  {professional.location ?? 'Sin ubicación'}
+                </span>
+                <span
+                  className={`rounded-full px-3 py-1 font-semibold ${
+                    professional.police_clearance_verified
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-amber-100 text-amber-700'
+                  }`}
+                >
+                  Solvencia {professional.police_clearance_verified ? 'verificada' : 'pendiente'}
+                </span>
+                <span
+                  className={`rounded-full px-3 py-1 font-semibold ${
+                    professional.professional_credential_verified
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-amber-100 text-amber-700'
+                  }`}
+                >
+                  Credencial {professional.professional_credential_verified ? 'verificada' : 'pendiente'}
+                </span>
+              </div>
+
+              {/* Sección de documentos */}
+              {(professional.police_clearance_pic || professional.professional_credential_pic) && (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-600">
+                    Documentos subidos
+                  </p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {professional.police_clearance_pic && (
+                      <div>
+                        <p className="mb-2 text-xs font-semibold text-slate-700">
+                          Solvencia Policial
+                        </p>
+                        <div className="relative">
+                          <img
+                            src={professional.police_clearance_pic}
+                            alt="Solvencia policial"
+                            className="h-32 w-full rounded-lg border border-slate-200 object-cover"
+                            onClick={() => window.open(professional.police_clearance_pic!, '_blank')}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                window.open(professional.police_clearance_pic!, '_blank')
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => window.open(professional.police_clearance_pic!, '_blank')}
+                            className="absolute bottom-2 right-2 rounded-full bg-slate-900/80 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-900"
+                          >
+                            Ver completo
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {professional.professional_credential_pic && (
+                      <div>
+                        <p className="mb-2 text-xs font-semibold text-slate-700">
+                          Credencial Profesional
+                        </p>
+                        <div className="relative">
+                          <img
+                            src={professional.professional_credential_pic}
+                            alt="Credencial profesional"
+                            className="h-32 w-full rounded-lg border border-slate-200 object-cover"
+                            onClick={() => window.open(professional.professional_credential_pic!, '_blank')}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                window.open(professional.professional_credential_pic!, '_blank')
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => window.open(professional.professional_credential_pic!, '_blank')}
+                            className="absolute bottom-2 right-2 rounded-full bg-slate-900/80 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-900"
+                          >
+                            Ver completo
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  onClick={() => handleApprove(professional.id)}
+                  disabled={processing === professional.id}
+                  className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50"
+                >
+                  {processing === professional.id ? 'Procesando...' : 'Aprobar'}
+                </button>
+                <button
+                  onClick={() => setSelectedUserId(professional.id)}
+                  className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Ver detalles
+                </button>
+                <button
+                  onClick={() => handleRejectClick(professional.id)}
+                  disabled={isProcessing}
+                  className="rounded-full border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isRejecting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-3 w-3 border-2 border-red-600 border-t-transparent"></div>
+                      Rechazando...
+                    </>
+                  ) : (
+                    'Rechazar'
+                  )}
+                </button>
+              </div>
+            </article>
+            )
+          })}
+        </div>
+      </section>
+
+      {/* Modal de detalles */}
+      {selectedUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setSelectedUserId(null)
+            }
+          }}
+        >
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <h3 className="text-2xl font-semibold text-slate-900">
+                  {selectedUser.name} {selectedUser.last_name}
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">{selectedUser.email}</p>
+              </div>
+              <button
+                onClick={() => setSelectedUserId(null)}
+                className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Información básica */}
+              <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <h4 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-600">
+                  Información básica
+                </h4>
+                <div className="grid gap-3 text-sm sm:grid-cols-2">
+                  <div>
+                    <p className="text-xs text-slate-500">Ubicación</p>
+                    <p className="font-semibold text-slate-900">
+                      {selectedUser.location ?? 'Sin definir'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Fecha de registro</p>
+                    <p className="font-semibold text-slate-900">
+                      {new Date(selectedUser.created_at).toLocaleDateString('es-AR', {
+                        dateStyle: 'long',
+                      })}
+                    </p>
+                  </div>
+                  {selectedUser.description && (
+                    <div className="sm:col-span-2">
+                      <p className="text-xs text-slate-500">Descripción</p>
+                      <p className="font-semibold text-slate-900">{selectedUser.description}</p>
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* Categorías */}
+              {selectedUser.serviceCategories && selectedUser.serviceCategories.length > 0 && (
+                <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <h4 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-600">
+                    Categorías de servicio
+                  </h4>
+                  <div className="space-y-2">
+                    {selectedUser.serviceCategories.map((cat, idx) => (
+                      <div key={idx} className="rounded-lg bg-white p-3">
+                        <p className="font-semibold text-slate-900">{cat.category}</p>
+                        {cat.subcategories && cat.subcategories.length > 0 && (
+                          <p className="mt-1 text-xs text-slate-500">
+                            {cat.subcategories.join(', ')}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Documentos */}
+              <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <h4 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-600">
+                  Documentos
+                </h4>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-sm font-semibold text-slate-700">Solvencia Policial</p>
+                      <span
+                        className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                          selectedUser.police_clearance_verified
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}
+                      >
+                        {selectedUser.police_clearance_verified ? 'Verificada' : 'Pendiente'}
+                      </span>
+                    </div>
+                    {selectedUser.police_clearance_pic ? (
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <img
+                            src={selectedUser.police_clearance_pic}
+                            alt="Solvencia policial"
+                            className="h-48 w-full rounded-lg border border-slate-200 object-contain bg-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              window.open(selectedUser.police_clearance_pic!, '_blank')
+                            }
+                            className="absolute bottom-2 right-2 rounded-full bg-slate-900/80 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-900"
+                          >
+                            Ver completo
+                          </button>
+                        </div>
+                        {!selectedUser.police_clearance_verified && (
+                          <button
+                            type="button"
+                            onClick={() => handleVerifyDocument(selectedUser.id, 'police_clearance')}
+                            disabled={processing === selectedUser.id}
+                            className="w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                          >
+                            ✓ Marcar como verificado
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+                        No se ha subido documento
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-sm font-semibold text-slate-700">
+                        Credencial Profesional
+                      </p>
+                      <span
+                        className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                          selectedUser.professional_credential_verified
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}
+                      >
+                        {selectedUser.professional_credential_verified ? 'Verificada' : 'Pendiente'}
+                      </span>
+                    </div>
+                    {selectedUser.professional_credential_pic ? (
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <img
+                            src={selectedUser.professional_credential_pic}
+                            alt="Credencial profesional"
+                            className="h-48 w-full rounded-lg border border-slate-200 object-contain bg-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              window.open(selectedUser.professional_credential_pic!, '_blank')
+                            }
+                            className="absolute bottom-2 right-2 rounded-full bg-slate-900/80 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-900"
+                          >
+                            Ver completo
+                          </button>
+                        </div>
+                        {!selectedUser.professional_credential_verified && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleVerifyDocument(selectedUser.id, 'professional_credential')
+                            }
+                            disabled={processing === selectedUser.id}
+                            className="w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                          >
+                            ✓ Marcar como verificado
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+                        No se ha subido documento
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              {/* Acciones */}
+              <div className="flex flex-wrap gap-3 border-t border-slate-200 pt-4">
+                <button
+                  onClick={() => handleApprove(selectedUser.id)}
+                  disabled={processing === selectedUser.id}
+                  className="flex-1 rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50"
+                >
+                  {processing === selectedUser.id ? 'Procesando...' : 'Aprobar proveedor'}
+                </button>
+                <button
+                  onClick={() => handleRejectClick(selectedUser.id)}
+                  disabled={processing === selectedUser.id}
+                  className="flex-1 rounded-full border border-red-200 bg-red-50 px-6 py-3 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
+                >
+                  {processing === selectedUser.id ? 'Procesando...' : 'Rechazar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Diálogo de confirmación */}
+      <ConfirmDialog
+        isOpen={showConfirmDialog}
+        onClose={() => {
+          setShowConfirmDialog(false)
+          setUserToReject(null)
+        }}
+        onConfirm={handleReject}
+        title="Confirmar rechazo"
+        message="¿Estás seguro de rechazar a este proveedor? Se le enviará un email con instrucciones para completar su registro."
+        confirmText="Sí, rechazar"
+        cancelText="Cancelar"
+        variant="destructive"
+      />
+    </div>
+  )
+}
+
+export default PendingUsers
+

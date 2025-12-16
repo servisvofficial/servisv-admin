@@ -18,10 +18,10 @@ type ReportSummary = {
   reporter_id: string
   reported_user_id: string
   created_at: string
-  reporter_name?: string
-  reporter_last_name?: string
-  reported_user_name?: string
-  reported_user_last_name?: string
+  reporter_name: string | null
+  reporter_last_name: string | null
+  reported_user_name: string | null
+  reported_user_last_name: string | null
 }
 
 const statusLabel: Record<string, string> = {

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
-type ServiceWithRelations = {
-  user_id: string
-  category_id: number
-  subcategory_id: string | null
-  categories: { id: number; name: string } | null
-  subcategories: { id: string; name: string } | null
+// Tipo real que retorna Supabase con JOINs
+type ServiceWithRelationsFromDB = {
+  user_id: any
+  category_id: any
+  subcategory_id: any
+  categories: { id: any; name: any }[] | null
+  subcategories: { id: any; name: any }[] | null
 }
 
 export type UserRecord = {
@@ -100,10 +101,15 @@ export function useUsersData(): UseUsersDataState {
       Map<string, string[]>
     >()
     if (servicesData) {
-      servicesData.forEach((service: ServiceWithRelations) => {
+      (servicesData as unknown as ServiceWithRelationsFromDB[]).forEach((service) => {
         const userId = service.user_id
-        const categoryName = service.categories?.name
-        const subcategoryName = service.subcategories?.name
+        // Supabase retorna arrays, tomar el primer elemento
+        const categoryName = Array.isArray(service.categories) && service.categories.length > 0
+          ? service.categories[0]?.name
+          : null
+        const subcategoryName = Array.isArray(service.subcategories) && service.subcategories.length > 0
+          ? service.subcategories[0]?.name
+          : null
 
         if (!categoryName) return
 

@@ -98,13 +98,15 @@ function Reports() {
     ) {
       setLoadingPreview(true)
       setPreviewError(null)
-      supabase
+      const query = supabase
         .from('requests')
         .select(
           'id,title,description,photos,location,service_category,subcategory,client_name,client_id,status,budget_range,scheduled_date,coordinates,created_at,updated_at',
         )
         .eq('id', selectedReport.reported_content_id)
         .single()
+      
+      Promise.resolve(query)
         .then(({ data, error }) => {
           if (error) {
             setPreviewError(error.message)
@@ -112,8 +114,13 @@ function Reports() {
           } else if (data) {
             setRequestPreview(data as RequestPreview)
           }
+          setLoadingPreview(false)
         })
-        .finally(() => setLoadingPreview(false))
+        .catch((err) => {
+          setPreviewError(err.message)
+          setRequestPreview(null)
+          setLoadingPreview(false)
+        })
     } else {
       setRequestPreview(null)
     }

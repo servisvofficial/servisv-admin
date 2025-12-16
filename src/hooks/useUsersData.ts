@@ -27,6 +27,9 @@ export type UserRecord = {
   professional_credential_verified: boolean
   police_clearance_pic?: string | null
   professional_credential_pic?: string | null
+  dui_frontal_pic?: string | null
+  dui_dorso_pic?: string | null
+  dui?: string | null
   created_at: string
   rating: number | null
   total_requests: number | null
@@ -56,7 +59,11 @@ export function useUsersData(): UseUsersDataState {
       .select(
         `id,name,last_name,rol,email,location,is_provider,is_validated,is_banned,
         police_clearance_verified,police_clearance_pic,
-        professional_credential_verified,professional_credential_pic,created_at,rating,total_requests,total_quotes,description,profile_pic`,
+        professional_credential_verified,professional_credential_pic,
+        dui_frontal_pic,
+        dui_dorso_pic,
+        dui,
+        created_at,rating,total_requests,total_quotes,description,profile_pic`,
       )
       .order('created_at', { ascending: false })
 

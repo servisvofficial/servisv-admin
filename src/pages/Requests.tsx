@@ -11,6 +11,23 @@ type RequestRecord = {
   created_at: string
 }
 
+type InProgressRequest = {
+  id: string
+  title: string
+  client_name: string
+  service_category: string
+  location: string | null
+  created_at: string
+  quote_id: string | null
+  quote_price: number | null
+  billing_id: string | null
+  billing_total_amount: number | null
+  billing_is_held: boolean | null
+  billing_created_at: string | null
+  billing_released_at: string | null
+  seller_name: string | null
+}
+
 const statusTexts: Record<string, string> = {
   open: 'Abierta',
   quoted: 'Cotizada',
@@ -24,7 +41,9 @@ const activeStatuses = ['open', 'quoted', 'accepted', 'in_progress']
 
 function Requests() {
   const [requests, setRequests] = useState<RequestRecord[]>([])
+  const [inProgressRequests, setInProgressRequests] = useState<InProgressRequest[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingInProgress, setLoadingInProgress] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -52,6 +71,84 @@ function Requests() {
     }
 
     fetchRequests()
+
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  // Cargar solicitudes en proceso con información de billing
+  useEffect(() => {
+    let ignore = false
+
+    const fetchInProgressRequests = async () => {
+      setLoadingInProgress(true)
+
+      // Obtener requests en proceso con sus quotes y billing
+      const { data: requestsData, error: requestsError } = await supabase
+        .from('requests')
+        .select(`
+          id,
+          title,
+          client_name,
+          service_category,
+          location,
+          created_at,
+          quotes!inner(
+            id,
+            price,
+            provider_name,
+            billing(
+              id,
+              total_amount,
+              is_held,
+              created_at,
+              released_at
+            )
+          )
+        `)
+        .eq('status', 'in_progress')
+        .order('created_at', { ascending: false })
+
+      if (ignore) return
+
+      if (requestsError) {
+        console.error('Error cargando solicitudes en proceso:', requestsError)
+        setLoadingInProgress(false)
+        return
+      }
+
+      if (requestsData) {
+        // Transformar los datos para facilitar el renderizado
+        const transformed: InProgressRequest[] = requestsData.map((req: any) => {
+          const quote = req.quotes?.[0] // Tomar la primera quote (debería haber solo una aceptada)
+          const billing = quote?.billing?.[0] // Tomar el primer billing
+
+          return {
+            id: req.id,
+            title: req.title,
+            client_name: req.client_name,
+            service_category: req.service_category,
+            location: req.location,
+            created_at: req.created_at,
+            quote_id: quote?.id || null,
+            quote_price: quote?.price || null,
+            billing_id: billing?.id || null,
+            billing_total_amount: billing?.total_amount || null,
+            billing_is_held: billing?.is_held ?? null,
+            billing_created_at: billing?.created_at || null,
+            billing_released_at: billing?.released_at || null,
+            seller_name: quote?.provider_name || null,
+          }
+        })
+
+        setInProgressRequests(transformed)
+      }
+
+      setLoadingInProgress(false)
+    }
+
+    fetchInProgressRequests()
 
     return () => {
       ignore = true
@@ -117,6 +214,133 @@ function Requests() {
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {error}
         </div>
+      )}
+
+      {/* Sección destacada: Solicitudes en proceso con pagos retenidos */}
+      {inProgressRequests.length > 0 && (
+        <section className="rounded-3xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50 p-6 shadow-xl">
+          <header className="mb-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500 text-white">
+                <span className="text-xl font-bold">!</span>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-slate-900">
+                  Solicitudes en Proceso - Pagos Retenidos
+                </h3>
+                <p className="text-sm text-slate-600">
+                  {inProgressRequests.length} solicitud{inProgressRequests.length !== 1 ? 'es' : ''} con pagos retenidos esperando liberación
+                </p>
+              </div>
+            </div>
+          </header>
+
+          <div className="space-y-4">
+            {loadingInProgress ? (
+              <p className="py-4 text-sm text-slate-500">Cargando solicitudes en proceso…</p>
+            ) : (
+              inProgressRequests.map((req) => (
+                <div
+                  key={req.id}
+                  className="rounded-2xl border border-amber-200 bg-white p-5 shadow-lg"
+                >
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                        Solicitud
+                      </p>
+                      <p className="mt-1 font-semibold text-slate-900">{req.title}</p>
+                      <p className="mt-1 text-xs text-slate-600">
+                        {req.service_category} · {req.location || 'Ubicación N/D'}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Cliente: {req.client_name}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                        Proveedor
+                      </p>
+                      <p className="mt-1 font-semibold text-slate-900">
+                        {req.seller_name || 'N/D'}
+                      </p>
+                      {req.quote_price && (
+                        <p className="mt-1 text-sm text-slate-600">
+                          Presupuesto: ${req.quote_price.toFixed(2)} USD
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                        Estado del Pago
+                      </p>
+                      {req.billing_id ? (
+                        <>
+                          <div className="mt-1 flex items-center gap-2">
+                            <span
+                              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                                req.billing_is_held
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-green-100 text-green-800'
+                              }`}
+                            >
+                              {req.billing_is_held ? '🔒 Retenido' : '✅ Liberado'}
+                            </span>
+                          </div>
+                          {req.billing_total_amount && (
+                            <p className="mt-2 text-sm font-semibold text-slate-900">
+                              Total pagado: ${req.billing_total_amount.toFixed(2)} USD
+                            </p>
+                          )}
+                          {req.billing_created_at && (
+                            <p className="mt-1 text-xs text-slate-500">
+                              Pagado: {new Date(req.billing_created_at).toLocaleString('es-AR')}
+                            </p>
+                          )}
+                          {req.billing_released_at && (
+                            <p className="mt-1 text-xs text-green-600">
+                              Liberado: {new Date(req.billing_released_at).toLocaleString('es-AR')}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="mt-1 text-sm text-slate-500">Sin billing registrado</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                        Acción Requerida
+                      </p>
+                      {req.billing_is_held ? (
+                        <div className="mt-2 rounded-lg bg-amber-100 p-3">
+                          <p className="text-sm font-semibold text-amber-900">
+                            ⚠️ Pago Retenido
+                          </p>
+                          <p className="mt-1 text-xs text-amber-700">
+                            El cliente debe marcar el servicio como completado para liberar el pago
+                            al proveedor.
+                          </p>
+                        </div>
+                      ) : req.billing_released_at ? (
+                        <div className="mt-2 rounded-lg bg-green-100 p-3">
+                          <p className="text-sm font-semibold text-green-900">✅ Pago Liberado</p>
+                          <p className="mt-1 text-xs text-green-700">
+                            El pago ya fue liberado al proveedor.
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-sm text-slate-500">Sin acción requerida</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
       )}
 
       <section className="grid gap-4 md:grid-cols-3">

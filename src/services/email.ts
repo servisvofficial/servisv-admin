@@ -13,13 +13,17 @@ type RejectionEmailPayload = {
   missingDocuments: {
     police_clearance: boolean;
     professional_credential: boolean;
+    dui_frontal: boolean;
+    dui_dorso: boolean;
   };
   userId: string;
+  isProvider: boolean;
 };
 
 type ApprovalEmailPayload = {
   to: string;
   toName: string;
+  isProvider: boolean;
 };
 
 type ReportNotificationToReportedUserPayload = {
@@ -77,6 +81,7 @@ export async function sendProviderRejectionEmail({
   toName,
   missingDocuments,
   userId,
+  isProvider,
 }: RejectionEmailPayload) {
   if (!to) {
     throw new Error("El destinatario es obligatorio para enviar el correo");
@@ -90,6 +95,7 @@ export async function sendProviderRejectionEmail({
 
   console.log("Enviando email de rechazo con userId:", userId);
   console.log("missingDocuments:", missingDocuments);
+  console.log("isProvider:", isProvider);
 
   // La Edge Function construye el email desde cero, solo enviamos los datos necesarios
   const { error } = await supabase.functions.invoke("send-email", {
@@ -99,6 +105,7 @@ export async function sendProviderRejectionEmail({
       toName,
       userId,
       missingDocuments,
+      isProvider,
     },
   });
 
@@ -109,11 +116,12 @@ export async function sendProviderRejectionEmail({
 }
 
 /**
- * Envía un correo notificando la aprobación de un proveedor.
+ * Envía un correo notificando la aprobación de un proveedor o cliente.
  */
 export async function sendProviderApprovalEmail({
   to,
   toName,
+  isProvider,
 }: ApprovalEmailPayload) {
   if (!to) {
     throw new Error("El destinatario es obligatorio para enviar el correo");
@@ -124,6 +132,7 @@ export async function sendProviderApprovalEmail({
       type: "provider_approval",
       to,
       toName,
+      isProvider,
     },
   });
 

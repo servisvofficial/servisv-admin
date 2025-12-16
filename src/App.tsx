@@ -63,18 +63,25 @@ function App() {
             <div className="absolute -bottom-24 left-4 h-56 w-56 rounded-full bg-emerald-300/40 blur-3xl" />
           </div>
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.35em] text-slate-700">
-                ServisV Administración
-              </p>
-              <h1 className="mt-3 text-3xl font-semibold leading-snug text-slate-900">
-                Control absoluto de la operación de servicios
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm text-slate-600">
-                Visualiza métricas en tiempo real, aprueba nuevos profesionales y
-                gestiona reportes críticos desde un solo espacio alineado al estilo
-                del sitio principal.
-              </p>
+            <div className="flex items-start gap-4">
+              <img
+                src="/assets/logoServiSVpng.png"
+                alt="ServiSV Logo"
+                className="w-16 h-16 object-contain flex-shrink-0"
+              />
+              <div>
+                <p className="text-xs uppercase tracking-[0.35em] text-slate-700">
+                  ServisV Administración
+                </p>
+                <h1 className="mt-3 text-3xl font-semibold leading-snug text-slate-900">
+                  Control absoluto de la operación de servicios
+                </h1>
+                <p className="mt-2 max-w-2xl text-sm text-slate-600">
+                  Visualiza métricas en tiempo real, aprueba nuevos profesionales y
+                  gestiona reportes críticos desde un solo espacio alineado al estilo
+                  del sitio principal.
+                </p>
+              </div>
             </div>
             <div className="grid gap-3 text-sm text-slate-700 sm:grid-cols-2 lg:text-right">
               <div>

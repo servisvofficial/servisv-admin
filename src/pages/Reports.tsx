@@ -61,6 +61,8 @@ function Reports() {
   })
   const [savingResolution, setSavingResolution] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 15
 
   const selectedReport = useMemo(() => {
     if (!reports.length) return null
@@ -128,6 +130,45 @@ function Reports() {
     })
     return summary
   }, [reports])
+
+  // Top de motivos más reportados
+  const topReasons = useMemo(() => {
+    const reasonCounts: Record<string, number> = {}
+    reports.forEach((report) => {
+      reasonCounts[report.reason_category] = (reasonCounts[report.reason_category] ?? 0) + 1
+    })
+    
+    // Convertir a array y ordenar por cantidad (descendente)
+    return Object.entries(reasonCounts)
+      .map(([reason, count]) => ({ reason, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5) // Top 5
+  }, [reports])
+
+  // Mapeo de motivos a etiquetas en español
+  const reasonLabels: Record<string, string> = {
+    spam: 'Spam',
+    contenido_inapropiado: 'Contenido Inapropiado',
+    discurso_de_odio: 'Discurso de Odio',
+    acoso: 'Acoso',
+    informacion_falsa: 'Información Falsa',
+    violacion_terminos: 'Violación de Términos',
+    otro: 'Otro',
+  }
+
+  // Paginación
+  const totalPages = Math.ceil(reports.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedReports = useMemo(() => 
+    reports.slice(startIndex, endIndex),
+    [reports, startIndex, endIndex]
+  )
+
+  // Resetear a página 1 cuando cambian los reportes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [reports.length])
 
   const handleResolutionSave = async () => {
     if (!selectedReport) {
@@ -356,11 +397,62 @@ function Reports() {
         })}
       </section>
 
+      {/* Top de motivos más reportados */}
+      {topReasons.length > 0 && (
+        <section className="rounded-3xl border border-white/70 bg-white/90 p-6 shadow-lg">
+          <header className="mb-6">
+            <h3 className="text-lg font-semibold text-slate-900">
+              Top Motivos de Reporte
+            </h3>
+            <p className="text-sm text-slate-500">
+              Los motivos más frecuentes por los que los usuarios reportan contenido
+            </p>
+          </header>
+          <div className="space-y-3">
+            {topReasons.map((item, index) => {
+              const percentage = reports.length > 0 
+                ? ((item.count / reports.length) * 100).toFixed(1) 
+                : '0'
+              return (
+                <div
+                  key={item.reason}
+                  className="flex items-center gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-100 text-purple-700 font-bold text-lg">
+                    {index + 1}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="font-semibold text-slate-900">
+                        {reasonLabels[item.reason] || item.reason}
+                      </p>
+                      <div className="text-right">
+                        <p className="text-lg font-bold text-slate-900">{item.count}</p>
+                        <p className="text-xs text-slate-500">{percentage}%</p>
+                      </div>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-purple-500 to-purple-600 rounded-full transition-all"
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-[320px,1fr]">
         <aside className="space-y-3 rounded-3xl border border-white/70 bg-white/80 p-4 shadow-lg">
           {loading && <p className="text-sm text-slate-500">Cargando...</p>}
+          {!loading && paginatedReports.length === 0 && (
+            <p className="text-sm text-slate-500">No hay reportes disponibles.</p>
+          )}
           {!loading &&
-            reports.map((report) => {
+            paginatedReports.map((report) => {
               const palette = statusPalette[report.status] ?? {
                 label: report.status,
                 badge: 'bg-slate-100 text-slate-600',
@@ -399,6 +491,58 @@ function Reports() {
                 </button>
               )
             })}
+          
+          {/* Paginación */}
+          {!loading && reports.length > itemsPerPage && (
+            <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-4">
+              <div className="text-xs text-slate-600">
+                Mostrando {startIndex + 1}-{Math.min(endIndex, reports.length)} de {reports.length} reportes
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Anterior
+                </button>
+                <div className="flex gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum: number
+                    if (totalPages <= 5) {
+                      pageNum = i + 1
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i
+                    } else {
+                      pageNum = currentPage - 2 + i
+                    }
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                          currentPage === pageNum
+                            ? 'bg-purple-600 text-white'
+                            : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    )
+                  })}
+                </div>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          )}
         </aside>
 
         <section className="rounded-3xl border border-white/70 bg-white/90 p-6 shadow-lg">

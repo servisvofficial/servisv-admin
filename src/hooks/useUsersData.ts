@@ -1,15 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
-// Tipo real que retorna Supabase con JOINs
-type ServiceWithRelationsFromDB = {
-  user_id: any
-  category_id: any
-  subcategory_id: any
-  categories: { id: any; name: any }[] | null
-  subcategories: { id: any; name: any }[] | null
-}
-
 export type UserRecord = {
   id: string
   name: string
@@ -82,18 +73,22 @@ export function useUsersData(): UseUsersDataState {
 
     // Cargar categorías y subcategorías desde user_professional_services con JOINs
     const userIds = data.map((user) => user.id)
-    const { data: servicesData } = await supabase
+    const { data: servicesData, error: servicesError } = await supabase
       .from('user_professional_services')
       .select(
         `
         user_id,
         category_id,
         subcategory_id,
-        categories:category_id (id, name),
-        subcategories:subcategory_id (id, name)
+        categories (id, name),
+        subcategories (id, name)
       `
       )
       .in('user_id', userIds)
+
+    if (servicesError) {
+      console.error("Error al cargar servicios profesionales:", servicesError);
+    }
 
     // Agrupar categorías y subcategorías por usuario
     const categoriesByUser = new Map<
@@ -101,15 +96,11 @@ export function useUsersData(): UseUsersDataState {
       Map<string, string[]>
     >()
     if (servicesData) {
-      (servicesData as unknown as ServiceWithRelationsFromDB[]).forEach((service) => {
+      servicesData.forEach((service: any) => {
         const userId = service.user_id
-        // Supabase retorna arrays, tomar el primer elemento
-        const categoryName = Array.isArray(service.categories) && service.categories.length > 0
-          ? service.categories[0]?.name
-          : null
-        const subcategoryName = Array.isArray(service.subcategories) && service.subcategories.length > 0
-          ? service.subcategories[0]?.name
-          : null
+        // Supabase retorna objetos cuando hay foreign keys
+        const categoryName = service.categories?.name || null
+        const subcategoryName = service.subcategories?.name || null
 
         if (!categoryName) return
 

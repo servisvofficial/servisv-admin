@@ -19,6 +19,36 @@ function Users() {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 20
 
+  // Refetch cuando se monta el componente (para sincronizar con cambios de otras páginas)
+  useEffect(() => {
+    const timer = setTimeout(() => refetch(), 100)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Refetch cuando la página/tab del navegador se vuelve visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refetch()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [refetch])
+
+  // Refetch periódico solo si la página está visible (para no gastar recursos en background)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refetch()
+      }
+    }, 120000) // 2 minutos (solo si está visible)
+
+    return () => clearInterval(interval)
+  }, [refetch])
+
   const stats = useMemo(() => {
     const providers = users.filter((user) => user.is_provider)
     const validatedProviders = providers.filter((user) => user.is_validated)

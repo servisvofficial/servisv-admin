@@ -25,9 +25,27 @@ function PendingUsers() {
   const [clientPage, setClientPage] = useState(1)
   const itemsPerPage = 10
 
+  // Refetch periódico solo si la página está visible (para no gastar recursos en background)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refetch()
+      }
+    }, 120000) // 2 minutos (solo si está visible)
+
+    return () => clearInterval(interval)
+  }, [refetch])
+
+  // Refetch al montar el componente
+  useEffect(() => {
+    const timer = setTimeout(() => refetch(), 100)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const pendingProviders = useMemo(() => {
     // Solo mostrar proveedores que:
-    // 1. Son proveedores y no están validados
+    // 1. Son proveedores y no están validados (is_validated = false)
     // 2. Tienen al menos un documento subido (para que no aparezcan los rechazados que aún no han vuelto a subir)
     let filtered = users.filter(
       (user) =>
@@ -71,7 +89,7 @@ function PendingUsers() {
 
   const pendingClients = useMemo(() => {
     // Solo mostrar clientes que:
-    // 1. NO son proveedores y no están validados
+    // 1. NO son proveedores y no están validados (is_validated = false)
     // 2. Tienen al menos un documento DUI subido
     let filtered = users.filter(
       (user) =>
@@ -168,27 +186,22 @@ function PendingUsers() {
       const providersCount = usersToAutoApprove.filter(u => u.is_provider).length
       const clientsCount = usersToAutoApprove.filter(u => !u.is_provider).length
 
-      console.log(
-        `Encontrados ${usersToAutoApprove.length} usuarios para aprobar automáticamente (más de 7 días): ${providersCount} proveedores, ${clientsCount} clientes`,
-      )
-
       // Aprobar cada usuario
       for (const user of usersToAutoApprove) {
         try {
-          const userType = user.is_provider ? 'proveedor' : 'cliente'
-          console.log(`Aprobando automáticamente a ${user.name} ${user.last_name} (${user.id}) - ${userType}`)
-
           // Actualizar estado
-          const { error: updateError } = await supabase
+          const { data: updatedUser, error: updateError } = await supabase
             .from('users')
             .update({ is_validated: true })
             .eq('id', user.id)
+            .select()
+            .single()
 
           if (updateError) {
-            console.error(
-              `Error al aprobar automáticamente a ${user.id}:`,
-              updateError,
-            )
+            continue
+          }
+
+          if (updatedUser && !updatedUser.is_validated) {
             continue
           }
 
@@ -199,7 +212,6 @@ function PendingUsers() {
               toName: `${user.name} ${user.last_name}`,
               isProvider: user.is_provider,
             })
-            console.log(`Email de aprobación enviado a ${user.email}`)
           } catch (emailError) {
             console.error(
               `Error al enviar email de aprobación a ${user.email}:`,
@@ -248,16 +260,29 @@ function PendingUsers() {
         return
       }
 
-      const { error: updateError } = await supabase
+      const { data: updatedUser, error: updateError } = await supabase
         .from('users')
         .update({ is_validated: true })
         .eq('id', userId)
+        .select()
+        .single()
 
       if (updateError) {
         toast({
           variant: "destructive",
           title: "Error al aprobar",
           description: updateError.message,
+        })
+        setProcessing(null)
+        return
+      }
+
+      // Verificar que realmente se actualizó
+      if (updatedUser && !updatedUser.is_validated) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "El usuario no se pudo validar correctamente. Verifica RLS en Supabase.",
         })
         setProcessing(null)
         return
@@ -438,8 +463,6 @@ function PendingUsers() {
           throw new Error("El ID del usuario no está disponible")
         }
         
-        console.log("Enviando email de rechazo para usuario:", user.id, user.email)
-        
         await sendProviderRejectionEmail({
           to: user.email,
           toName: `${user.name} ${user.last_name}`,
@@ -601,7 +624,7 @@ function PendingUsers() {
         </div>
         <button
           onClick={refetch}
-          className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+          className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
         >
           Actualizar
         </button>
@@ -652,7 +675,7 @@ function PendingUsers() {
                 className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
                 Filtros {showFilters ? '▲' : '▼'}
-              </button>
+            </button>
               {showFilters && (
                 <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-4 shadow-lg z-10">
                   <div className="space-y-3">
@@ -837,7 +860,7 @@ function PendingUsers() {
                   </p>
                   <div className="grid gap-4 sm:grid-cols-2">
                     {professional.police_clearance_pic && (
-                      <div>
+                <div>
                         <p className="mb-2 text-xs font-semibold text-slate-700">
                           Solvencia Policial
                         </p>
@@ -862,8 +885,8 @@ function PendingUsers() {
                           >
                             Ver completo
                           </button>
-                        </div>
-                      </div>
+                </div>
+                </div>
                     )}
                     {professional.professional_credential_pic && (
                       <div>
@@ -891,7 +914,7 @@ function PendingUsers() {
                           >
                             Ver completo
                           </button>
-                        </div>
+              </div>
                       </div>
                     )}
                     {professional.dui_frontal_pic && (
@@ -1087,21 +1110,21 @@ function PendingUsers() {
                         </div>
                       </div>
 
-                      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                        <span className="rounded-full bg-white px-3 py-1 font-semibold text-slate-600">
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                <span className="rounded-full bg-white px-3 py-1 font-semibold text-slate-600">
                           {client.location ?? 'Sin ubicación'}
-                        </span>
+                </span>
                         {client.dui_frontal_pic && (
                           <span className="rounded-full px-3 py-1 font-semibold bg-emerald-100 text-emerald-700">
                             DUI Frontal subido
-                          </span>
+                  </span>
                         )}
                         {client.dui_dorso_pic && (
                           <span className="rounded-full px-3 py-1 font-semibold bg-emerald-100 text-emerald-700">
                             DUI Dorso subido
                           </span>
                         )}
-                      </div>
+              </div>
 
                       {/* Sección de documentos DUI */}
                       {(client.dui_frontal_pic || client.dui_dorso_pic) && (
@@ -1172,20 +1195,20 @@ function PendingUsers() {
                         </div>
                       )}
 
-                      <div className="mt-4 flex flex-wrap gap-3">
+              <div className="mt-4 flex flex-wrap gap-3">
                         <button
                           onClick={() => handleApprove(client.id)}
                           disabled={processing === client.id}
                           className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50"
                         >
                           {processing === client.id ? 'Procesando...' : 'Aprobar'}
-                        </button>
+                </button>
                         <button
                           onClick={() => setSelectedUserId(client.id)}
                           className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                         >
                           Ver detalles
-                        </button>
+                </button>
                         <button
                           onClick={() => handleRejectClick(client.id)}
                           disabled={isProcessing}
@@ -1199,9 +1222,9 @@ function PendingUsers() {
                           ) : (
                             'Rechazar'
                           )}
-                        </button>
-                      </div>
-                    </article>
+                </button>
+              </div>
+            </article>
                   )
                 })}
               </div>
@@ -1334,9 +1357,9 @@ function PendingUsers() {
                           </p>
                         )}
                       </div>
-                    ))}
-                  </div>
-                </section>
+          ))}
+        </div>
+      </section>
               )}
 
               {/* Documentos */}

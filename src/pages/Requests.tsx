@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { CreateFSEModal } from "../components/CreateFSEModal";
+import { FSEDetailModal } from "../components/FSEDetailModal";
 
 type RequestRecord = {
   id: string
@@ -19,6 +20,7 @@ type InProgressRequest = {
   service_category: string
   location: string | null
   created_at: string
+  status: string
   quote_id: string | null
   quote_price: number | null
   billing_id: string | null
@@ -52,6 +54,7 @@ function Requests() {
   const [selectedBillingForFse, setSelectedBillingForFse] = useState<any | null>(null)
   const [fseInvoices, setFseInvoices] = useState<any[]>([])
   const [loadingFse, setLoadingFse] = useState(true)
+  const [selectedFseForDetail, setSelectedFseForDetail] = useState<any | null>(null)
 
   useEffect(() => {
     let ignore = false
@@ -94,7 +97,7 @@ function Requests() {
       // Paso 1: Obtener requests en progreso o completadas
       const { data: requestsData, error: requestsError } = await supabase
         .from('requests')
-        .select('id, title, client_name, service_category, location, created_at, selected_quote_id')
+        .select('id, title, client_name, service_category, location, created_at, status, selected_quote_id')
         .in('status', ['in_progress', 'completed'])
         .order('created_at', { ascending: false })
 
@@ -154,6 +157,7 @@ function Requests() {
           service_category: req.service_category,
           location: req.location,
           created_at: req.created_at,
+          status: req.status,
           quote_id: quote?.id || null,
           quote_price: quote?.price || null,
           billing_id: billing?.id || null,
@@ -388,7 +392,14 @@ function Requests() {
                       <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
                         Acción Requerida
                       </p>
-                      {req.billing_is_held ? (
+                      {req.status === 'completed' && req.billing_is_held ? (
+                        <div className="mt-2 rounded-lg bg-green-100 p-3">
+                          <p className="text-sm font-semibold text-green-900">✅ Servicio Completado</p>
+                          <p className="mt-1 text-xs text-green-700">
+                            El pago puede ser liberado al proveedor.
+                          </p>
+                        </div>
+                      ) : req.billing_is_held ? (
                         <div className="mt-2 rounded-lg bg-amber-100 p-3">
                           <p className="text-sm font-semibold text-amber-900">
                             ⚠️ Pago Retenido
@@ -473,6 +484,13 @@ function Requests() {
               .limit(50)
             if (data) setFseInvoices(data)
           }}
+        />
+      )}
+
+      {selectedFseForDetail && (
+        <FSEDetailModal
+          fse={selectedFseForDetail}
+          onClose={() => setSelectedFseForDetail(null)}
         />
       )}
 
@@ -650,9 +668,7 @@ function Requests() {
                       </td>
                       <td className="px-4 py-3">
                         <button
-                          onClick={() => {
-                            alert(`Ver detalles de FSE:\n\nCódigo: ${fse.dte_codigo_generacion}\nTotal: $${fse.total_compra}\n\n(Implementar modal de detalles)`)
-                          }}
+                          onClick={() => setSelectedFseForDetail(fse)}
                           className="text-sm font-medium text-emerald-600 hover:text-emerald-700"
                         >
                           Ver detalles

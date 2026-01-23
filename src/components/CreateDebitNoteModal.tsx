@@ -37,7 +37,7 @@ export function CreateDebitNoteModal({ invoice, onClose, onSuccess }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const facturadoDte =
+  const dteBase =
     typeof invoice?.dte_json?.resumen?.totalGravada === "number" &&
     Number.isFinite(invoice.dte_json.resumen.totalGravada) &&
     invoice.dte_json.resumen.totalGravada > 0
@@ -47,6 +47,22 @@ export function CreateDebitNoteModal({ invoice, onClose, onSuccess }: Props) {
           invoice.total_commissions > 0
         ? invoice.total_commissions
         : invoice.total_amount;
+
+  const dteIva =
+    typeof invoice?.dte_json?.resumen?.tributos?.find?.((t: any) => t?.codigo === "20")?.valor ===
+      "number" &&
+    Number.isFinite(
+      invoice.dte_json.resumen.tributos.find((t: any) => t?.codigo === "20")?.valor
+    )
+      ? invoice.dte_json.resumen.tributos.find((t: any) => t?.codigo === "20")?.valor
+      : dteBase * 0.13;
+
+  const facturadoDteTotal =
+    typeof invoice?.dte_json?.resumen?.montoTotalOperacion === "number" &&
+    Number.isFinite(invoice.dte_json.resumen.montoTotalOperacion) &&
+    invoice.dte_json.resumen.montoTotalOperacion > 0
+      ? invoice.dte_json.resumen.montoTotalOperacion
+      : dteBase + dteIva;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,6 +102,7 @@ export function CreateDebitNoteModal({ invoice, onClose, onSuccess }: Props) {
             billing_id: invoice.id,
             motivo: motivoTexto || motivo,
             monto_afectado: monto,
+            monto_incluye_iva: true,
             observaciones: observaciones || null,
             num_pago_electronico: numPagoElectronico || null,
           }),
@@ -186,7 +203,7 @@ export function CreateDebitNoteModal({ invoice, onClose, onSuccess }: Props) {
                       ${invoice.total_amount.toFixed(2)}
                     </div>
                     <div className="text-xs text-purple-700/80 mt-1">
-                      Facturado (DTE): ${facturadoDte.toFixed(2)}
+                      Facturado (DTE): ${facturadoDteTotal.toFixed(2)}
                     </div>
                   </div>
                 </div>
@@ -226,7 +243,7 @@ export function CreateDebitNoteModal({ invoice, onClose, onSuccess }: Props) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Monto Adicional a Cobrar *
+                Monto Adicional a Cobrar (con IVA) *
               </label>
               <input
                 type="number"
@@ -240,6 +257,9 @@ export function CreateDebitNoteModal({ invoice, onClose, onSuccess }: Props) {
               />
               <p className="text-xs text-gray-500 mt-1">
                 Monto que se cobrará adicionalmente
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Este monto incluye IVA.
               </p>
             </div>
 

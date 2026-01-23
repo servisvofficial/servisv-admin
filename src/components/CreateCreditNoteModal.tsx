@@ -38,9 +38,8 @@ export function CreateCreditNoteModal({ invoice, onClose, onSuccess }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Para NC: MH valida contra el DTE relacionado (no contra el total del servicio).
-  // En ServiSV normalmente se factura la comisión (totalGravada del DTE), no el total del servicio.
-  const maxFacturableDte =
+  // Para NC: MH valida contra el DTE relacionado, y el "total" incluye IVA.
+  const dteBase =
     typeof invoice?.dte_json?.resumen?.totalGravada === "number" &&
     Number.isFinite(invoice.dte_json.resumen.totalGravada) &&
     invoice.dte_json.resumen.totalGravada > 0
@@ -50,6 +49,22 @@ export function CreateCreditNoteModal({ invoice, onClose, onSuccess }: Props) {
           invoice.total_commissions > 0
         ? invoice.total_commissions
         : invoice.total_amount;
+
+  const dteIva =
+    typeof invoice?.dte_json?.resumen?.tributos?.find?.((t: any) => t?.codigo === "20")?.valor ===
+      "number" &&
+    Number.isFinite(
+      invoice.dte_json.resumen.tributos.find((t: any) => t?.codigo === "20")?.valor
+    )
+      ? invoice.dte_json.resumen.tributos.find((t: any) => t?.codigo === "20")?.valor
+      : dteBase * 0.13;
+
+  const maxFacturableDteTotal =
+    typeof invoice?.dte_json?.resumen?.montoTotalOperacion === "number" &&
+    Number.isFinite(invoice.dte_json.resumen.montoTotalOperacion) &&
+    invoice.dte_json.resumen.montoTotalOperacion > 0
+      ? invoice.dte_json.resumen.montoTotalOperacion
+      : dteBase + dteIva;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,10 +82,10 @@ export function CreateCreditNoteModal({ invoice, onClose, onSuccess }: Props) {
       return;
     }
 
-    if (monto > maxFacturableDte) {
+    if (monto > maxFacturableDteTotal) {
       // Mensaje específico para evitar rechazo 016 en MH.
       setError(
-        `El monto no puede ser mayor al monto facturado en el DTE relacionado ($${maxFacturableDte.toFixed(
+        `El monto no puede ser mayor al total del DTE relacionado ($${maxFacturableDteTotal.toFixed(
           2
         )}).`
       );
@@ -99,6 +114,7 @@ export function CreateCreditNoteModal({ invoice, onClose, onSuccess }: Props) {
             billing_id: invoice.id,
             motivo: motivoTexto || motivo,
             monto_afectado: monto,
+            monto_incluye_iva: true,
             observaciones: observaciones || null,
           }),
         }
@@ -198,7 +214,7 @@ export function CreateCreditNoteModal({ invoice, onClose, onSuccess }: Props) {
                   ${invoice.total_amount.toFixed(2)}
                 </div>
                 <div className="text-xs text-blue-700/80 mt-1">
-                  Facturado (DTE): ${maxFacturableDte.toFixed(2)}
+                  Facturado (DTE): ${maxFacturableDteTotal.toFixed(2)}
                 </div>
               </div>
             </div>
@@ -238,13 +254,13 @@ export function CreateCreditNoteModal({ invoice, onClose, onSuccess }: Props) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Monto a Afectar *
+                Monto a Afectar (con IVA) *
               </label>
               <input
                 type="number"
                 step="0.01"
                 min="0.01"
-                max={maxFacturableDte}
+                max={maxFacturableDteTotal}
                 value={montoAfectado}
                 onChange={(e) => setMontoAfectado(e.target.value)}
                 placeholder="0.00"
@@ -252,7 +268,10 @@ export function CreateCreditNoteModal({ invoice, onClose, onSuccess }: Props) {
                 required
               />
               <p className="text-xs text-gray-500 mt-1">
-                Máximo (DTE): ${maxFacturableDte.toFixed(2)}
+                Máximo (DTE): ${maxFacturableDteTotal.toFixed(2)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Este monto incluye IVA. La nota anula base + IVA del DTE relacionado.
               </p>
             </div>
 

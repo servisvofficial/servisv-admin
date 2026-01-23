@@ -89,73 +89,83 @@ function Requests() {
     const fetchInProgressRequests = async () => {
       setLoadingInProgress(true)
 
-      // Obtener requests en proceso con sus quotes y billing
+      // Paso 1: Obtener requests en progreso o completadas
       const { data: requestsData, error: requestsError } = await supabase
         .from('requests')
-        .select(`
-          id,
-          title,
-          client_name,
-          service_category,
-          location,
-          created_at,
-          quotes!inner(
-            id,
-            price,
-            provider_name,
-            billing(
-              id,
-              total_amount,
-              seller_amount,
-              description,
-              is_held,
-              created_at,
-              released_at
-            )
-          )
-        `)
-        // La FSE se emite para documentar la compra/pago al proveedor,
-        // normalmente cuando el servicio ya está en curso o completado.
+        .select('id, title, client_name, service_category, location, created_at, selected_quote_id')
         .in('status', ['in_progress', 'completed'])
         .order('created_at', { ascending: false })
 
       if (ignore) return
 
       if (requestsError) {
-        console.error('Error cargando solicitudes en proceso:', requestsError)
+        console.error('Error cargando solicitudes:', requestsError)
         setLoadingInProgress(false)
         return
       }
 
-      if (requestsData) {
-        // Transformar los datos para facilitar el renderizado
-        const transformed: InProgressRequest[] = requestsData.map((req: any) => {
-          const quote = req.quotes?.[0] // Tomar la primera quote (debería haber solo una aceptada)
-          const billing = quote?.billing?.[0] // Tomar el primer billing
-
-          return {
-            id: req.id,
-            title: req.title,
-            client_name: req.client_name,
-            service_category: req.service_category,
-            location: req.location,
-            created_at: req.created_at,
-            quote_id: quote?.id || null,
-            quote_price: quote?.price || null,
-            billing_id: billing?.id || null,
-            billing_total_amount: billing?.total_amount || null,
-            billing_seller_amount: billing?.seller_amount || null,
-            billing_description: billing?.description || null,
-            billing_is_held: billing?.is_held ?? null,
-            billing_created_at: billing?.created_at || null,
-            billing_released_at: billing?.released_at || null,
-            seller_name: quote?.provider_name || null,
-          }
-        })
-
-        setInProgressRequests(transformed)
+      if (!requestsData || requestsData.length === 0) {
+        setInProgressRequests([])
+        setLoadingInProgress(false)
+        return
       }
 
+      // Filtrar requests que tienen selected_quote_id
+      const requestsWithQuote = requestsData.filter(req => req.selected_quote_id)
+      const quoteIds = requestsWithQuote.map(req => req.selected_quote_id)
+
+      if (quoteIds.length === 0) {
+        setInProgressRequests([])
+        setLoadingInProgress(false)
+        return
+      }
+
+      // Paso 2: Obtener las quotes seleccionadas
+      const { data: quotesData, error: quotesError } = await supabase
+        .from('quotes')
+        .select('id, price, provider_name')
+        .in('id', quoteIds)
+
+      if (quotesError) {
+        console.error('Error cargando quotes:', quotesError)
+      }
+
+      // Paso 3: Obtener billing asociado a esas quotes
+      const { data: billingData, error: billingError } = await supabase
+        .from('billing')
+        .select('id, quote_id, total_amount, seller_amount, description, is_held, created_at, released_at')
+        .in('quote_id', quoteIds)
+
+      if (billingError) {
+        console.error('Error cargando billing:', billingError)
+      }
+
+      // Paso 4: Combinar todos los datos
+      const transformed: InProgressRequest[] = requestsWithQuote.map((req: any) => {
+        const quote = quotesData?.find(q => q.id === req.selected_quote_id)
+        const billing = billingData?.find(b => b.quote_id === req.selected_quote_id)
+
+        return {
+          id: req.id,
+          title: req.title,
+          client_name: req.client_name,
+          service_category: req.service_category,
+          location: req.location,
+          created_at: req.created_at,
+          quote_id: quote?.id || null,
+          quote_price: quote?.price || null,
+          billing_id: billing?.id || null,
+          billing_total_amount: billing?.total_amount || null,
+          billing_seller_amount: billing?.seller_amount || null,
+          billing_description: billing?.description || null,
+          billing_is_held: billing?.is_held ?? null,
+          billing_created_at: billing?.created_at || null,
+          billing_released_at: billing?.released_at || null,
+          seller_name: quote?.provider_name || null,
+        }
+      })
+
+      setInProgressRequests(transformed)
       setLoadingInProgress(false)
     }
 
@@ -193,6 +203,10 @@ function Requests() {
     ]
   }, [requests])
 
+  const fseCandidates = useMemo(() => {
+    return inProgressRequests.filter((r) => !!r.billing_id)
+  }, [inProgressRequests])
+
   const operationalTips = useMemo(() => {
     const tips = []
     const active = stats[0]?.value ?? 0
@@ -228,7 +242,7 @@ function Requests() {
       )}
 
       {/* Sección destacada: Solicitudes con billing (para emitir FSE) */}
-      {inProgressRequests.length > 0 && (
+      <section className="rounded-3xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50 p-6 shadow-xl">
         <section className="rounded-3xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50 p-6 shadow-xl">
           <header className="mb-6">
             <div className="flex items-center gap-3">
@@ -240,7 +254,7 @@ function Requests() {
                   Solicitudes con Pago (billing) - FSE
                 </h3>
                 <p className="text-sm text-slate-600">
-                  {inProgressRequests.length} solicitud{inProgressRequests.length !== 1 ? 'es' : ''} con billing para emitir Factura de Sujeto Excluido (14)
+                  {fseCandidates.length} solicitud{fseCandidates.length !== 1 ? 'es' : ''} con billing para emitir Factura de Sujeto Excluido (14)
                 </p>
               </div>
             </div>
@@ -249,8 +263,15 @@ function Requests() {
           <div className="space-y-4">
             {loadingInProgress ? (
               <p className="py-4 text-sm text-slate-500">Cargando solicitudes en proceso…</p>
+            ) : fseCandidates.length === 0 ? (
+              <div className="rounded-2xl border border-amber-200 bg-white p-5 text-sm text-slate-600">
+                No hay solicitudes <strong>completadas/en curso</strong> con <strong>billing</strong> asociado.
+                <div className="mt-2 text-xs text-slate-500">
+                  El botón FSE aparece sólo cuando existe un billing (pago registrado) para esa solicitud.
+                </div>
+              </div>
             ) : (
-              inProgressRequests.map((req) => (
+              fseCandidates.map((req) => (
                 <div
                   key={req.id}
                   className="rounded-2xl border border-amber-200 bg-white p-5 shadow-lg"
@@ -381,7 +402,7 @@ function Requests() {
             )}
           </div>
         </section>
-      )}
+      </section>
 
       {showFseModal && selectedBillingForFse && (
         <CreateFSEModal

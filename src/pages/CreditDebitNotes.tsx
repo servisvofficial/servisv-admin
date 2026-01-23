@@ -8,6 +8,20 @@ export default function CreditDebitNotes() {
   const [filter, setFilter] = useState<"all" | "credit" | "debit">("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (e) {
+      console.error("No se pudo copiar al portapapeles:", e);
+    }
+  };
+
+  const shortText = (value: string, head = 8, tail = 6) => {
+    if (!value) return value;
+    if (value.length <= head + tail + 3) return value;
+    return `${value.slice(0, head)}...${value.slice(-tail)}`;
+  };
+
   const filteredNotes = notes.filter((note: any) => {
     if (filter !== "all" && note.note_type !== filter) return false;
     if (statusFilter !== "all" && note.dte_estado !== statusFilter) return false;
@@ -112,6 +126,9 @@ export default function CreditDebitNotes() {
                   Tipo
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Código de Generación
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Número de Control
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -157,7 +174,53 @@ export default function CreditDebitNotes() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {note.dte_numero_control || "Pendiente"}
+                      {((note.dte_response?.codigoGeneracion || note.dte_codigo_generacion) as string | null) ? (
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="font-mono text-xs text-gray-700"
+                            title={(note.dte_response?.codigoGeneracion || note.dte_codigo_generacion) as string}
+                          >
+                            {shortText(
+                              (note.dte_response?.codigoGeneracion || note.dte_codigo_generacion) as string,
+                              10,
+                              8
+                            )}
+                          </span>
+                          <button
+                            type="button"
+                            className="text-xs text-blue-600 hover:text-blue-900"
+                            title="Copiar código de generación (para buscar en Hacienda)"
+                            onClick={() =>
+                              copyToClipboard(
+                                (note.dte_response?.codigoGeneracion || note.dte_codigo_generacion) as string
+                              )
+                            }
+                          >
+                            Copiar
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-gray-500">Pendiente</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {note.dte_numero_control ? (
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs text-gray-700" title={note.dte_numero_control}>
+                            {shortText(note.dte_numero_control, 14, 10)}
+                          </span>
+                          <button
+                            type="button"
+                            className="text-xs text-gray-600 hover:text-gray-900"
+                            title="Copiar número de control"
+                            onClick={() => copyToClipboard(note.dte_numero_control)}
+                          >
+                            Copiar
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-gray-500">Pendiente</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {note.billing?.invoice_number || "-"}
@@ -195,7 +258,7 @@ export default function CreditDebitNotes() {
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-green-600 hover:text-green-900"
-                          title="Ver en Hacienda"
+                          title="Consulta pública (QR)"
                         >
                           Consultar
                         </a>

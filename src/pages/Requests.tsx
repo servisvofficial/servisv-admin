@@ -82,7 +82,7 @@ function Requests() {
     }
   }, [])
 
-  // Cargar solicitudes en proceso con información de billing
+  // Cargar solicitudes con pago (billing) para emitir FSE
   useEffect(() => {
     let ignore = false
 
@@ -114,7 +114,9 @@ function Requests() {
             )
           )
         `)
-        .eq('status', 'in_progress')
+        // La FSE se emite para documentar la compra/pago al proveedor,
+        // normalmente cuando el servicio ya está en curso o completado.
+        .in('status', ['in_progress', 'completed'])
         .order('created_at', { ascending: false })
 
       if (ignore) return
@@ -225,7 +227,7 @@ function Requests() {
         </div>
       )}
 
-      {/* Sección destacada: Solicitudes en proceso con pagos retenidos */}
+      {/* Sección destacada: Solicitudes con billing (para emitir FSE) */}
       {inProgressRequests.length > 0 && (
         <section className="rounded-3xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50 p-6 shadow-xl">
           <header className="mb-6">
@@ -235,10 +237,10 @@ function Requests() {
               </div>
               <div>
                 <h3 className="text-xl font-semibold text-slate-900">
-                  Solicitudes en Proceso - Pagos Retenidos
+                  Solicitudes con Pago (billing) - FSE
                 </h3>
                 <p className="text-sm text-slate-600">
-                  {inProgressRequests.length} solicitud{inProgressRequests.length !== 1 ? 'es' : ''} con pagos retenidos esperando liberación
+                  {inProgressRequests.length} solicitud{inProgressRequests.length !== 1 ? 'es' : ''} con billing para emitir Factura de Sujeto Excluido (14)
                 </p>
               </div>
             </div>

@@ -64,6 +64,8 @@ export function CreateDebitNoteModal({ invoice, onClose, onSuccess }: Props) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            // Forzar ejecución regional (evita bloqueo MH por egress/region)
+            "x-region": "us-east-1",
             Authorization: `Bearer ${serviceRoleKey}`,
           },
           body: JSON.stringify({

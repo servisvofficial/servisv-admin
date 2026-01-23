@@ -351,9 +351,11 @@ function Requests() {
                             className="inline-flex items-center rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
                             title="Generar Factura Sujeto Excluido (14) para el proveedor"
                             onClick={() => {
+                              const billingId = req.billing_id;
+                              if (!billingId) return;
                               setSelectedBillingForFse({
-                                id: req.billing_id,
-                                invoice_number: `BILL-${req.billing_id.slice(0, 8)}`,
+                                id: billingId,
+                                invoice_number: `BILL-${billingId.slice(0, 8)}`,
                                 invoice_date: req.billing_created_at || new Date().toISOString(),
                                 total_amount: req.billing_total_amount || 0,
                                 seller_amount: req.billing_seller_amount,

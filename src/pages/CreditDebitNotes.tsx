@@ -7,6 +7,7 @@ export default function CreditDebitNotes() {
   const { notes, loading, error } = useCreditDebitNotes();
   const [filter, setFilter] = useState<"all" | "credit" | "debit">("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [selectedNote, setSelectedNote] = useState<any | null>(null);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -20,6 +21,14 @@ export default function CreditDebitNotes() {
     if (!value) return value;
     if (value.length <= head + tail + 3) return value;
     return `${value.slice(0, head)}...${value.slice(-tail)}`;
+  };
+
+  const safeJsonStringify = (value: any) => {
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return String(value);
+    }
   };
 
   const filteredNotes = notes.filter((note: any) => {
@@ -249,6 +258,7 @@ export default function CreditDebitNotes() {
                       <button
                         className="text-blue-600 hover:text-blue-900 mr-3"
                         title="Ver detalles"
+                        onClick={() => setSelectedNote(note)}
                       >
                         Ver
                       </button>
@@ -297,6 +307,197 @@ export default function CreditDebitNotes() {
           </div>
         </div>
       </div>
+
+      {/* Modal de detalle */}
+      {selectedNote && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998]"
+            onClick={() => setSelectedNote(null)}
+          />
+          <div className="fixed inset-0 z-[9999] overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+                <div className="bg-gradient-to-r from-gray-800 to-gray-900 px-6 py-5 flex justify-between items-center flex-shrink-0">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">Detalle de Nota</h2>
+                    <p className="text-gray-200 text-sm mt-1">
+                      {selectedNote.note_type === "credit" ? "Nota de Crédito (05)" : "Nota de Débito (06)"} ·{" "}
+                      {selectedNote.dte_estado}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSelectedNote(null)}
+                    className="text-white/80 hover:text-white hover:bg-white/10 rounded-lg p-2 transition"
+                    type="button"
+                    title="Cerrar"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="p-6 overflow-y-auto flex-1 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                      <div className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">
+                        Código de Generación (MH)
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="font-mono text-sm text-gray-900 break-all">
+                          {selectedNote.dte_response?.codigoGeneracion || selectedNote.dte_codigo_generacion || "-"}
+                        </div>
+                        {(selectedNote.dte_response?.codigoGeneracion || selectedNote.dte_codigo_generacion) && (
+                          <button
+                            type="button"
+                            className="text-xs text-blue-600 hover:text-blue-900"
+                            onClick={() =>
+                              copyToClipboard(
+                                selectedNote.dte_response?.codigoGeneracion ||
+                                  selectedNote.dte_codigo_generacion
+                              )
+                            }
+                          >
+                            Copiar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                      <div className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">
+                        Número de Control
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="font-mono text-sm text-gray-900 break-all">
+                          {selectedNote.dte_numero_control || "-"}
+                        </div>
+                        {selectedNote.dte_numero_control && (
+                          <button
+                            type="button"
+                            className="text-xs text-blue-600 hover:text-blue-900"
+                            onClick={() => copyToClipboard(selectedNote.dte_numero_control)}
+                          >
+                            Copiar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                      <div className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">
+                        Sello recibido
+                      </div>
+                      <div className="font-mono text-sm text-gray-900 break-all">
+                        {selectedNote.dte_sello_recepcion || selectedNote.dte_response?.selloRecibido || "-"}
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                      <div className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">
+                        Factura relacionada
+                      </div>
+                      <div className="text-sm text-gray-900">
+                        {selectedNote.billing?.invoice_number || selectedNote.billing_id || "-"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-white border border-gray-200 rounded-xl p-4">
+                      <div className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Motivo</div>
+                      <div className="text-sm text-gray-900">{selectedNote.motivo || "-"}</div>
+                    </div>
+                    <div className="bg-white border border-gray-200 rounded-xl p-4">
+                      <div className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Monto</div>
+                      <div className="text-sm font-semibold text-gray-900">
+                        ${Number(selectedNote.monto_afectado || 0).toFixed(2)}
+                      </div>
+                    </div>
+                    <div className="bg-white border border-gray-200 rounded-xl p-4">
+                      <div className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Estado</div>
+                      <div className="text-sm text-gray-900">{selectedNote.dte_estado}</div>
+                    </div>
+                  </div>
+
+                  {Array.isArray(selectedNote.dte_observaciones) && selectedNote.dte_observaciones.length > 0 && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                      <div className="text-xs text-yellow-800 font-medium uppercase tracking-wide mb-2">
+                        Observaciones
+                      </div>
+                      <ul className="list-disc pl-5 text-sm text-yellow-900 space-y-1">
+                        {selectedNote.dte_observaciones.map((obs: string, idx: number) => (
+                          <li key={idx}>{obs}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="border border-gray-200 rounded-xl overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+                        <div className="text-sm font-semibold text-gray-900">Respuesta MH</div>
+                        <button
+                          type="button"
+                          className="text-xs text-blue-600 hover:text-blue-900"
+                          onClick={() => copyToClipboard(safeJsonStringify(selectedNote.dte_response))}
+                        >
+                          Copiar JSON
+                        </button>
+                      </div>
+                      <pre className="p-4 text-xs text-gray-800 overflow-auto max-h-80">
+                        {safeJsonStringify(selectedNote.dte_response)}
+                      </pre>
+                    </div>
+
+                    <div className="border border-gray-200 rounded-xl overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+                        <div className="text-sm font-semibold text-gray-900">DTE Nota (JSON)</div>
+                        <button
+                          type="button"
+                          className="text-xs text-blue-600 hover:text-blue-900"
+                          onClick={() => copyToClipboard(safeJsonStringify(selectedNote.dte_json))}
+                        >
+                          Copiar JSON
+                        </button>
+                      </div>
+                      <pre className="p-4 text-xs text-gray-800 overflow-auto max-h-80">
+                        {safeJsonStringify(selectedNote.dte_json)}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                  {selectedNote.dte_estado === "procesado" && selectedNote.qr_url && (
+                    <a
+                      href={selectedNote.qr_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 rounded-md bg-green-600 text-white text-sm hover:bg-green-700"
+                    >
+                      Consulta pública (QR)
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedNote(null)}
+                    className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 text-sm hover:bg-gray-50"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

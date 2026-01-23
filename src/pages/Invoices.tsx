@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { CreateCreditNoteModal } from "../components/CreateCreditNoteModal";
 import { CreateDebitNoteModal } from "../components/CreateDebitNoteModal";
+import { CreateFSEModal } from "../components/CreateFSEModal";
 
 interface Invoice {
   id: string;
@@ -12,9 +13,9 @@ interface Invoice {
   invoice_type: string;
   total_amount: number;
   dte_tipo_documento: string;
-  dte_codigo_generacion: string;
-  dte_numero_control: string;
-  dte_estado: string;
+  dte_codigo_generacion: string | null;
+  dte_numero_control: string | null;
+  dte_estado: string | null;
   fiscal_data: any;
   created_at: string;
 }
@@ -26,6 +27,7 @@ export default function Invoices() {
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [showCreditNoteModal, setShowCreditNoteModal] = useState(false);
   const [showDebitNoteModal, setShowDebitNoteModal] = useState(false);
+  const [showFseModal, setShowFseModal] = useState(false);
 
   const fetchInvoices = async () => {
     try {
@@ -35,8 +37,6 @@ export default function Invoices() {
       const { data, error: fetchError } = await supabase
         .from("billing")
         .select("*")
-        .not("dte_codigo_generacion", "is", null)
-        .eq("dte_estado", "procesado")
         .order("created_at", { ascending: false });
 
       if (fetchError) throw fetchError;
@@ -62,6 +62,11 @@ export default function Invoices() {
   const handleCreateDebitNote = (invoice: Invoice) => {
     setSelectedInvoice(invoice);
     setShowDebitNoteModal(true);
+  };
+
+  const handleCreateFse = (invoice: Invoice) => {
+    setSelectedInvoice(invoice);
+    setShowFseModal(true);
   };
 
   if (loading) {
@@ -136,7 +141,11 @@ export default function Invoices() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {invoice.dte_tipo_documento === "03" ? "CCF (03)" : "Factura (01)"}
+                        {invoice.dte_tipo_documento === "03"
+                          ? "CCF (03)"
+                          : invoice.dte_tipo_documento === "14"
+                            ? "FSE (14)"
+                            : "Factura (01)"}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
@@ -151,7 +160,9 @@ export default function Invoices() {
                       })}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500 font-mono text-xs">
-                      {invoice.dte_codigo_generacion?.substring(0, 8)}...
+                      {invoice.dte_codigo_generacion
+                        ? `${invoice.dte_codigo_generacion.substring(0, 8)}...`
+                        : "-"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <div className="flex gap-2">
@@ -173,6 +184,16 @@ export default function Invoices() {
                             </button>
                           </>
                         )}
+                        {String(invoice.fiscal_data?.tipo_dte || "") === "14" &&
+                          invoice.dte_tipo_documento !== "14" && (
+                            <button
+                              onClick={() => handleCreateFse(invoice)}
+                              className="px-3 py-1 bg-emerald-600 text-white text-xs rounded hover:bg-emerald-700"
+                              title="Generar Factura de Sujeto Excluido (14)"
+                            >
+                              FSE
+                            </button>
+                          )}
                       </div>
                     </td>
                   </tr>
@@ -208,6 +229,21 @@ export default function Invoices() {
           }}
           onSuccess={() => {
             setShowDebitNoteModal(false);
+            setSelectedInvoice(null);
+            fetchInvoices();
+          }}
+        />
+      )}
+
+      {showFseModal && selectedInvoice && (
+        <CreateFSEModal
+          invoice={selectedInvoice}
+          onClose={() => {
+            setShowFseModal(false);
+            setSelectedInvoice(null);
+          }}
+          onSuccess={() => {
+            setShowFseModal(false);
             setSelectedInvoice(null);
             fetchInvoices();
           }}

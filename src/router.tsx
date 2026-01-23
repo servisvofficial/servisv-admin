@@ -7,6 +7,8 @@ import Reports from './pages/Reports'
 import Requests from './pages/Requests'
 import Services from './pages/Services'
 import Users from './pages/Users'
+import Invoices from './pages/Invoices'
+import CreditDebitNotes from './pages/CreditDebitNotes'
 
 export const router = createBrowserRouter([
   {
@@ -36,6 +38,14 @@ export const router = createBrowserRouter([
       {
         path: 'solicitudes',
         element: <Requests />,
+      },
+      {
+        path: 'facturas',
+        element: <Invoices />,
+      },
+      {
+        path: 'notas',
+        element: <CreditDebitNotes />,
       },
     ],
   },

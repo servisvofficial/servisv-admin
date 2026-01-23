@@ -10,6 +10,8 @@ const navItems = [
   { to: '/reportes', label: 'Reportes' },
   { to: '/servicios', label: 'Servicios' },
   { to: '/solicitudes', label: 'Solicitudes' },
+  { to: '/facturas', label: 'Facturas' },
+  { to: '/notas', label: 'NC/ND' },
 ]
 
 function App() {

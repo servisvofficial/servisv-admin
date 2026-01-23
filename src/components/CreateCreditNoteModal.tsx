@@ -7,6 +7,8 @@ interface Invoice {
   invoice_number: string;
   invoice_date: string;
   total_amount: number;
+  total_commissions?: number;
+  dte_json?: any;
   fiscal_data: any;
   dte_codigo_generacion: string;
   dte_tipo_documento: string;
@@ -36,6 +38,19 @@ export function CreateCreditNoteModal({ invoice, onClose, onSuccess }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Para NC: MH valida contra el DTE relacionado (no contra el total del servicio).
+  // En ServiSV normalmente se factura la comisión (totalGravada del DTE), no el total del servicio.
+  const maxFacturableDte =
+    typeof invoice?.dte_json?.resumen?.totalGravada === "number" &&
+    Number.isFinite(invoice.dte_json.resumen.totalGravada) &&
+    invoice.dte_json.resumen.totalGravada > 0
+      ? invoice.dte_json.resumen.totalGravada
+      : typeof invoice.total_commissions === "number" &&
+          Number.isFinite(invoice.total_commissions) &&
+          invoice.total_commissions > 0
+        ? invoice.total_commissions
+        : invoice.total_amount;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -52,8 +67,13 @@ export function CreateCreditNoteModal({ invoice, onClose, onSuccess }: Props) {
       return;
     }
 
-    if (monto > invoice.total_amount) {
-      setError(`El monto no puede ser mayor al total de la factura ($${invoice.total_amount.toFixed(2)})`);
+    if (monto > maxFacturableDte) {
+      // Mensaje específico para evitar rechazo 016 en MH.
+      setError(
+        `El monto no puede ser mayor al monto facturado en el DTE relacionado ($${maxFacturableDte.toFixed(
+          2
+        )}).`
+      );
       return;
     }
 
@@ -173,9 +193,12 @@ export function CreateCreditNoteModal({ invoice, onClose, onSuccess }: Props) {
                 </div>
               </div>
               <div>
-                <div className="text-xs text-blue-600 font-medium uppercase tracking-wide mb-1">Monto Total</div>
+                <div className="text-xs text-blue-600 font-medium uppercase tracking-wide mb-1">Total servicio</div>
                 <div className="text-lg font-bold text-blue-700">
                   ${invoice.total_amount.toFixed(2)}
+                </div>
+                <div className="text-xs text-blue-700/80 mt-1">
+                  Facturado (DTE): ${maxFacturableDte.toFixed(2)}
                 </div>
               </div>
             </div>
@@ -221,7 +244,7 @@ export function CreateCreditNoteModal({ invoice, onClose, onSuccess }: Props) {
                 type="number"
                 step="0.01"
                 min="0.01"
-                max={invoice.total_amount}
+                max={maxFacturableDte}
                 value={montoAfectado}
                 onChange={(e) => setMontoAfectado(e.target.value)}
                 placeholder="0.00"
@@ -229,7 +252,7 @@ export function CreateCreditNoteModal({ invoice, onClose, onSuccess }: Props) {
                 required
               />
               <p className="text-xs text-gray-500 mt-1">
-                Máximo: ${invoice.total_amount.toFixed(2)}
+                Máximo (DTE): ${maxFacturableDte.toFixed(2)}
               </p>
             </div>
 

@@ -7,6 +7,8 @@ interface Invoice {
   invoice_number: string;
   invoice_date: string;
   total_amount: number;
+  total_commissions?: number;
+  dte_json?: any;
   fiscal_data: any;
   dte_codigo_generacion: string;
   dte_tipo_documento: string;
@@ -34,6 +36,17 @@ export function CreateDebitNoteModal({ invoice, onClose, onSuccess }: Props) {
   const [numPagoElectronico, setNumPagoElectronico] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const facturadoDte =
+    typeof invoice?.dte_json?.resumen?.totalGravada === "number" &&
+    Number.isFinite(invoice.dte_json.resumen.totalGravada) &&
+    invoice.dte_json.resumen.totalGravada > 0
+      ? invoice.dte_json.resumen.totalGravada
+      : typeof invoice.total_commissions === "number" &&
+          Number.isFinite(invoice.total_commissions) &&
+          invoice.total_commissions > 0
+        ? invoice.total_commissions
+        : invoice.total_amount;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,9 +181,12 @@ export function CreateDebitNoteModal({ invoice, onClose, onSuccess }: Props) {
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs text-purple-600 font-medium uppercase tracking-wide mb-1">Monto Total</div>
+                    <div className="text-xs text-purple-600 font-medium uppercase tracking-wide mb-1">Total servicio</div>
                     <div className="text-lg font-bold text-purple-700">
                       ${invoice.total_amount.toFixed(2)}
+                    </div>
+                    <div className="text-xs text-purple-700/80 mt-1">
+                      Facturado (DTE): ${facturadoDte.toFixed(2)}
                     </div>
                   </div>
                 </div>

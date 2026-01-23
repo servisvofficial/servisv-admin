@@ -10,8 +10,8 @@ interface Invoice {
   total_commissions?: number;
   dte_json?: any;
   fiscal_data: any;
-  dte_codigo_generacion: string;
-  dte_tipo_documento: string;
+  dte_codigo_generacion: string | null;
+  dte_tipo_documento: string | null;
 }
 
 interface Props {

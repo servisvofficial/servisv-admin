@@ -4,7 +4,6 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { CreateCreditNoteModal } from "../components/CreateCreditNoteModal";
 import { CreateDebitNoteModal } from "../components/CreateDebitNoteModal";
-import { CreateFSEModal } from "../components/CreateFSEModal";
 
 interface Invoice {
   id: string;
@@ -27,7 +26,6 @@ export default function Invoices() {
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [showCreditNoteModal, setShowCreditNoteModal] = useState(false);
   const [showDebitNoteModal, setShowDebitNoteModal] = useState(false);
-  const [showFseModal, setShowFseModal] = useState(false);
 
   const fetchInvoices = async () => {
     try {
@@ -62,11 +60,6 @@ export default function Invoices() {
   const handleCreateDebitNote = (invoice: Invoice) => {
     setSelectedInvoice(invoice);
     setShowDebitNoteModal(true);
-  };
-
-  const handleCreateFse = (invoice: Invoice) => {
-    setSelectedInvoice(invoice);
-    setShowFseModal(true);
   };
 
   if (loading) {
@@ -184,16 +177,6 @@ export default function Invoices() {
                             </button>
                           </>
                         )}
-                        {String(invoice.fiscal_data?.tipo_dte || "") === "14" &&
-                          invoice.dte_tipo_documento !== "14" && (
-                            <button
-                              onClick={() => handleCreateFse(invoice)}
-                              className="px-3 py-1 bg-emerald-600 text-white text-xs rounded hover:bg-emerald-700"
-                              title="Generar Factura de Sujeto Excluido (14)"
-                            >
-                              FSE
-                            </button>
-                          )}
                       </div>
                     </td>
                   </tr>
@@ -229,21 +212,6 @@ export default function Invoices() {
           }}
           onSuccess={() => {
             setShowDebitNoteModal(false);
-            setSelectedInvoice(null);
-            fetchInvoices();
-          }}
-        />
-      )}
-
-      {showFseModal && selectedInvoice && (
-        <CreateFSEModal
-          invoice={selectedInvoice}
-          onClose={() => {
-            setShowFseModal(false);
-            setSelectedInvoice(null);
-          }}
-          onSuccess={() => {
-            setShowFseModal(false);
             setSelectedInvoice(null);
             fetchInvoices();
           }}

@@ -11,6 +11,8 @@ interface Invoice {
   dte_codigo_generacion?: string | null;
   dte_tipo_documento?: string | null;
   dte_estado?: string | null;
+  seller_amount?: number | null;
+  description?: string | null;
 }
 
 interface Props {
@@ -21,6 +23,22 @@ interface Props {
 
 export function CreateFSEModal({ invoice, onClose, onSuccess }: Props) {
   const [observaciones, setObservaciones] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [totalCompra, setTotalCompra] = useState<string>("");
+  const [reteRenta, setReteRenta] = useState<string>("0");
+  const [ivaRete1, setIvaRete1] = useState<string>("0");
+
+  const [tipoDocumento, setTipoDocumento] = useState("13");
+  const [numDocumento, setNumDocumento] = useState("");
+  const [nombre, setNombre] = useState("");
+  const [departamento, setDepartamento] = useState("");
+  const [municipio, setMunicipio] = useState("");
+  const [direccion, setDireccion] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [correo, setCorreo] = useState("");
+  const [codActividad, setCodActividad] = useState("");
+  const [descActividad, setDescActividad] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,6 +48,21 @@ export function CreateFSEModal({ invoice, onClose, onSuccess }: Props) {
 
     try {
       setLoading(true);
+
+      const total = Number(totalCompra || 0);
+      if (!Number.isFinite(total) || total <= 0) {
+        setError("Total compra debe ser mayor a 0");
+        return;
+      }
+
+      if (!tipoDocumento || !numDocumento.trim() || !nombre.trim()) {
+        setError("Completa tipo/número de documento y nombre del sujeto excluido");
+        return;
+      }
+      if (!departamento.trim() || !municipio.trim() || !direccion.trim()) {
+        setError("Completa dirección (departamento, municipio y complemento)");
+        return;
+      }
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
@@ -45,6 +78,24 @@ export function CreateFSEModal({ invoice, onClose, onSuccess }: Props) {
           type: "factura_sujeto_excluido",
           billing_id: invoice.id,
           observaciones: observaciones || null,
+          descripcion: descripcion || invoice.description || null,
+          total_compra: total,
+          rete_renta: Number(reteRenta || 0),
+          iva_rete1: Number(ivaRete1 || 0),
+          sujeto_excluido: {
+            tipoDocumento,
+            numDocumento: numDocumento.trim(),
+            nombre: nombre.trim(),
+            codActividad: codActividad.trim() ? codActividad.trim() : null,
+            descActividad: descActividad.trim() ? descActividad.trim() : null,
+            direccion: {
+              departamento: departamento.trim(),
+              municipio: municipio.trim(),
+              complemento: direccion.trim(),
+            },
+            telefono: telefono.trim() ? telefono.trim() : null,
+            correo: correo.trim() ? correo.trim() : null,
+          },
         }),
       });
 
@@ -107,7 +158,7 @@ export function CreateFSEModal({ invoice, onClose, onSuccess }: Props) {
                   <div className="col-span-2">
                     <div className="text-xs text-emerald-700 font-medium uppercase tracking-wide mb-1">Sujeto Excluido</div>
                     <div className="text-sm font-semibold text-gray-900 truncate">
-                      {invoice.fiscal_data?.nombre_completo || "N/A"}
+                      (Proveedor) Completar manualmente abajo
                     </div>
                   </div>
                 </div>
@@ -120,6 +171,184 @@ export function CreateFSEModal({ invoice, onClose, onSuccess }: Props) {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Total compra (USD) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={totalCompra}
+                      onChange={(e) => setTotalCompra(e.target.value)}
+                      placeholder={String(invoice.seller_amount ?? invoice.total_amount ?? 0)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Sugerido: ${Number(invoice.seller_amount ?? invoice.total_amount ?? 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Descripción (opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={descripcion}
+                      onChange={(e) => setDescripcion(e.target.value)}
+                      maxLength={1000}
+                      placeholder={invoice.description || "Servicio adquirido a sujeto excluido"}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Retención Renta (opcional)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={reteRenta}
+                      onChange={(e) => setReteRenta(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      IVA retenido (opcional)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={ivaRete1}
+                      onChange={(e) => setIvaRete1(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-xl p-4">
+                  <div className="text-sm font-semibold text-gray-900 mb-3">Datos del sujeto excluido (Proveedor)</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Tipo documento *</label>
+                      <select
+                        value={tipoDocumento}
+                        onChange={(e) => setTipoDocumento(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      >
+                        <option value="13">DUI (13)</option>
+                        <option value="36">NIT (36)</option>
+                        <option value="02">Carnet Residente (02)</option>
+                        <option value="03">Pasaporte (03)</option>
+                        <option value="37">Otro (37)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Número documento *</label>
+                      <input
+                        type="text"
+                        value={numDocumento}
+                        onChange={(e) => setNumDocumento(e.target.value)}
+                        maxLength={20}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        required
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Nombre *</label>
+                      <input
+                        type="text"
+                        value={nombre}
+                        onChange={(e) => setNombre(e.target.value)}
+                        maxLength={250}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Departamento (01-14) *</label>
+                      <input
+                        type="text"
+                        value={departamento}
+                        onChange={(e) => setDepartamento(e.target.value)}
+                        maxLength={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Municipio (2 dígitos) *</label>
+                      <input
+                        type="text"
+                        value={municipio}
+                        onChange={(e) => setMunicipio(e.target.value)}
+                        maxLength={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        required
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Dirección (complemento) *</label>
+                      <input
+                        type="text"
+                        value={direccion}
+                        onChange={(e) => setDireccion(e.target.value)}
+                        maxLength={200}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Teléfono (opcional)</label>
+                      <input
+                        type="text"
+                        value={telefono}
+                        onChange={(e) => setTelefono(e.target.value)}
+                        maxLength={30}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Correo (opcional)</label>
+                      <input
+                        type="email"
+                        value={correo}
+                        onChange={(e) => setCorreo(e.target.value)}
+                        maxLength={100}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Cod. actividad (opcional)</label>
+                      <input
+                        type="text"
+                        value={codActividad}
+                        onChange={(e) => setCodActividad(e.target.value)}
+                        maxLength={6}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Desc. actividad (opcional)</label>
+                      <input
+                        type="text"
+                        value={descActividad}
+                        onChange={(e) => setDescActividad(e.target.value)}
+                        maxLength={150}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Observaciones (opcional)

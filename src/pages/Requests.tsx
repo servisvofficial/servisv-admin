@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { CreateFSEModal } from "../components/CreateFSEModal";
 
 type RequestRecord = {
   id: string
@@ -26,6 +27,8 @@ type InProgressRequest = {
   billing_created_at: string | null
   billing_released_at: string | null
   seller_name: string | null
+  billing_seller_amount: number | null
+  billing_description: string | null
 }
 
 const statusTexts: Record<string, string> = {
@@ -45,6 +48,8 @@ function Requests() {
   const [loading, setLoading] = useState(true)
   const [loadingInProgress, setLoadingInProgress] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showFseModal, setShowFseModal] = useState(false)
+  const [selectedBillingForFse, setSelectedBillingForFse] = useState<any | null>(null)
 
   useEffect(() => {
     let ignore = false
@@ -101,6 +106,8 @@ function Requests() {
             billing(
               id,
               total_amount,
+              seller_amount,
+              description,
               is_held,
               created_at,
               released_at
@@ -135,6 +142,8 @@ function Requests() {
             quote_price: quote?.price || null,
             billing_id: billing?.id || null,
             billing_total_amount: billing?.total_amount || null,
+            billing_seller_amount: billing?.seller_amount || null,
+            billing_description: billing?.description || null,
             billing_is_held: billing?.is_held ?? null,
             billing_created_at: billing?.created_at || null,
             billing_released_at: billing?.released_at || null,
@@ -334,6 +343,33 @@ function Requests() {
                       ) : (
                         <p className="mt-2 text-sm text-slate-500">Sin acción requerida</p>
                       )}
+
+                      {req.billing_id && (
+                        <div className="mt-3">
+                          <button
+                            type="button"
+                            className="inline-flex items-center rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+                            title="Generar Factura Sujeto Excluido (14) para el proveedor"
+                            onClick={() => {
+                              setSelectedBillingForFse({
+                                id: req.billing_id,
+                                invoice_number: `BILL-${req.billing_id.slice(0, 8)}`,
+                                invoice_date: req.billing_created_at || new Date().toISOString(),
+                                total_amount: req.billing_total_amount || 0,
+                                seller_amount: req.billing_seller_amount,
+                                description: req.billing_description,
+                                fiscal_data: { nombre_completo: req.seller_name || "Proveedor" },
+                              });
+                              setShowFseModal(true);
+                            }}
+                          >
+                            FSE (14)
+                          </button>
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            Se usa para documentar el pago/compra al proveedor sujeto excluido.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -341,6 +377,20 @@ function Requests() {
             )}
           </div>
         </section>
+      )}
+
+      {showFseModal && selectedBillingForFse && (
+        <CreateFSEModal
+          invoice={selectedBillingForFse}
+          onClose={() => {
+            setShowFseModal(false)
+            setSelectedBillingForFse(null)
+          }}
+          onSuccess={() => {
+            setShowFseModal(false)
+            setSelectedBillingForFse(null)
+          }}
+        />
       )}
 
       <section className="grid gap-4 md:grid-cols-3">

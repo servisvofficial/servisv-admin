@@ -9,6 +9,7 @@ import Services from './pages/Services'
 import Users from './pages/Users'
 import Invoices from './pages/Invoices'
 import CreditDebitNotes from './pages/CreditDebitNotes'
+import DTEEvents from './pages/DTEEvents'
 
 export const router = createBrowserRouter([
   {
@@ -46,6 +47,10 @@ export const router = createBrowserRouter([
       {
         path: 'notas',
         element: <CreditDebitNotes />,
+      },
+      {
+        path: 'eventos-dte',
+        element: <DTEEvents />,
       },
     ],
   },

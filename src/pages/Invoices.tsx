@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { CreateCreditNoteModal } from "../components/CreateCreditNoteModal";
 import { CreateDebitNoteModal } from "../components/CreateDebitNoteModal";
+import { CreateInvalidationModal } from "../components/CreateInvalidationModal";
 
 interface Invoice {
   id: string;
@@ -11,10 +12,13 @@ interface Invoice {
   invoice_date: string;
   invoice_type: string;
   total_amount: number;
+  total_commissions?: number;
   dte_tipo_documento: string;
   dte_codigo_generacion: string | null;
   dte_numero_control: string | null;
+  dte_sello_recepcion: string | null;
   dte_estado: string | null;
+  dte_json?: any;
   fiscal_data: any;
   created_at: string;
 }
@@ -26,6 +30,9 @@ export default function Invoices() {
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [showCreditNoteModal, setShowCreditNoteModal] = useState(false);
   const [showDebitNoteModal, setShowDebitNoteModal] = useState(false);
+  const [showInvalidationModal, setShowInvalidationModal] = useState(false);
+  const [contingencyLoadingId, setContingencyLoadingId] = useState<string | null>(null);
+  const [duplicateLoadingId, setDuplicateLoadingId] = useState<string | null>(null);
 
   const fetchInvoices = async () => {
     try {
@@ -60,6 +67,80 @@ export default function Invoices() {
   const handleCreateDebitNote = (invoice: Invoice) => {
     setSelectedInvoice(invoice);
     setShowDebitNoteModal(true);
+  };
+
+  const handleInvalidateInvoice = (invoice: Invoice) => {
+    setSelectedInvoice(invoice);
+    setShowInvalidationModal(true);
+  };
+
+  const handleEmitContingency = async (invoice: Invoice) => {
+    setError(null);
+    setContingencyLoadingId(invoice.id);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/create-invoice`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${serviceRoleKey}`,
+        },
+        body: JSON.stringify({
+          emitirEnContingencia: true,
+          billingId: invoice.id,
+        }),
+      });
+
+      const result = await response.json();
+      console.log("🔍 Respuesta de emitir contingencia:", result);
+      
+      if (!response.ok || result?.success === false) {
+        const errorMsg = result?.error || result?.message || "Error al emitir DTE en contingencia";
+        console.error("❌ Error emitir contingencia:", errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      await fetchInvoices();
+    } catch (err: any) {
+      console.error("❌ Excepción emitir contingencia:", err);
+      setError(err.message || "Error al emitir DTE en contingencia");
+    } finally {
+      setContingencyLoadingId(null);
+    }
+  };
+
+  const handleDuplicateForContingency = async (invoice: Invoice) => {
+    setError(null);
+    setDuplicateLoadingId(invoice.id);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/create-invoice`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${serviceRoleKey}`,
+        },
+        body: JSON.stringify({
+          duplicarParaContingencia: true,
+          billingId: invoice.id,
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok || result?.success === false) {
+        throw new Error(result?.error || "Error al duplicar factura para contingencia");
+      }
+
+      await fetchInvoices();
+    } catch (err: any) {
+      setError(err.message || "Error al duplicar factura para contingencia");
+    } finally {
+      setDuplicateLoadingId(null);
+    }
   };
 
   if (loading) {
@@ -177,6 +258,42 @@ export default function Invoices() {
                             </button>
                           </>
                         )}
+                        {invoice.dte_codigo_generacion && invoice.dte_sello_recepcion && (
+                          <button
+                            onClick={() => handleInvalidateInvoice(invoice)}
+                            className="px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600"
+                            title="Invalidar Documento"
+                          >
+                            Invalidar
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleEmitContingency(invoice)}
+                          className="px-3 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600 disabled:opacity-50"
+                          title={
+                            invoice.dte_codigo_generacion
+                              ? "Ya tiene DTE generado/transmitido"
+                              : "Emitir DTE en contingencia (sin transmitir)"
+                          }
+                          disabled={
+                            contingencyLoadingId === invoice.id ||
+                            Boolean(invoice.dte_codigo_generacion)
+                          }
+                        >
+                          {contingencyLoadingId === invoice.id
+                            ? "Emitiendo..."
+                            : "Emitir Contingencia"}
+                        </button>
+                        <button
+                          onClick={() => handleDuplicateForContingency(invoice)}
+                          className="px-3 py-1 bg-amber-600 text-white text-xs rounded hover:bg-amber-700 disabled:opacity-50"
+                          title="Crear una factura nueva para contingencia (sin pasarela)"
+                          disabled={duplicateLoadingId === invoice.id}
+                        >
+                          {duplicateLoadingId === invoice.id
+                            ? "Duplicando..."
+                            : "Duplicar Contingencia"}
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -212,6 +329,21 @@ export default function Invoices() {
           }}
           onSuccess={() => {
             setShowDebitNoteModal(false);
+            setSelectedInvoice(null);
+            fetchInvoices();
+          }}
+        />
+      )}
+
+      {showInvalidationModal && selectedInvoice && (
+        <CreateInvalidationModal
+          invoice={selectedInvoice}
+          onClose={() => {
+            setShowInvalidationModal(false);
+            setSelectedInvoice(null);
+          }}
+          onSuccess={() => {
+            setShowInvalidationModal(false);
             setSelectedInvoice(null);
             fetchInvoices();
           }}

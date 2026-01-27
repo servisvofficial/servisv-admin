@@ -12,6 +12,7 @@ const navItems = [
   { to: '/solicitudes', label: 'Solicitudes' },
   { to: '/facturas', label: 'Facturas' },
   { to: '/notas', label: 'NC/ND' },
+  { to: '/eventos-dte', label: 'Eventos DTE' },
 ]
 
 function App() {

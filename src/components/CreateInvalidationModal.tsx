@@ -6,9 +6,9 @@ interface Invoice {
   invoice_date: string;
   total_amount: number;
   fiscal_data: any;
-  dte_codigo_generacion: string;
-  dte_numero_control: string;
-  dte_sello_recepcion: string;
+  dte_codigo_generacion: string | null;
+  dte_numero_control: string | null;
+  dte_sello_recepcion: string | null;
   dte_tipo_documento: string;
 }
 
@@ -169,7 +169,7 @@ export function CreateInvalidationModal({ invoice, onClose, onSuccess }: Props) 
                       Código DTE
                     </div>
                     <div className="font-mono text-xs text-gray-900 truncate">
-                      {invoice.dte_codigo_generacion}
+                      {invoice.dte_codigo_generacion ?? "—"}
                     </div>
                   </div>
                   <div>

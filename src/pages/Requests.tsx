@@ -615,12 +615,23 @@ function Requests() {
                         sellerAmount != null
                           ? Number(sellerAmount).toFixed(2)
                           : "—";
+                      // IVA 13% sobre comisión plataforma + comisión pasarela
+                      const commissionsSubtotal =
+                        (platformBuyer ?? 0) + (gatewayCommission ?? 0);
+                      const ivaOnCommissions =
+                        commissionsSubtotal > 0
+                          ? commissionsSubtotal * 0.13
+                          : null;
+                      const displayIva =
+                        ivaOnCommissions != null
+                          ? Number(ivaOnCommissions).toFixed(2)
+                          : "—";
                       return (
                         <div className="mt-6 border-t border-slate-200 pt-6">
                           <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">
                             Desglose de pago
                           </p>
-                          <div className="mt-4 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                          <div className="mt-4 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-5">
                             <div className="flex flex-col gap-0.5">
                               <span className="text-slate-500">
                                 Monto servicio
@@ -643,6 +654,14 @@ function Requests() {
                               </span>
                               <span className="font-semibold text-slate-900">
                                 ${displayPlatform} USD
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-slate-500">
+                                IVA (13% sobre comisiones)
+                              </span>
+                              <span className="font-semibold text-slate-900">
+                                ${displayIva} USD
                               </span>
                             </div>
                             <div className="flex flex-col gap-0.5">

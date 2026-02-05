@@ -585,6 +585,8 @@ function Requests() {
                       const platformBuyer =
                         req.billing_platform_commission_buyer ??
                         (serviceAmount != null ? serviceAmount * 0.1 : null);
+                      const platformSeller =
+                        req.billing_platform_commission_seller ?? null;
                       const gatewayCommission =
                         req.billing_payment_gateway_commission ??
                         (totalAmount != null &&
@@ -611,6 +613,10 @@ function Requests() {
                         platformBuyer != null
                           ? Number(platformBuyer).toFixed(2)
                           : "—";
+                      const displayPlatformSeller =
+                        platformSeller != null
+                          ? Number(platformSeller).toFixed(2)
+                          : "—";
                       const displaySeller =
                         sellerAmount != null
                           ? Number(sellerAmount).toFixed(2)
@@ -631,7 +637,7 @@ function Requests() {
                           <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">
                             Desglose de pago
                           </p>
-                          <div className="mt-4 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-5">
+                          <div className="mt-4 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-6">
                             <div className="flex flex-col gap-0.5">
                               <span className="text-slate-500">
                                 Monto servicio
@@ -654,6 +660,14 @@ function Requests() {
                               </span>
                               <span className="font-semibold text-slate-900">
                                 ${displayPlatform} USD
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-slate-500">
+                                Comisión del proveedor
+                              </span>
+                              <span className="font-semibold text-slate-900">
+                                ${displayPlatformSeller} USD
                               </span>
                             </div>
                             <div className="flex flex-col gap-0.5">

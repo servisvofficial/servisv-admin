@@ -9,6 +9,10 @@ interface ProviderData {
   dui?: string;
   nit?: string;
   numero_registro_contribuyente?: string;
+  /** Dirección (complemento) – puede venir de users.location */
+  direccion?: string;
+  departamento?: string;
+  municipio?: string;
 }
 
 interface Invoice {
@@ -51,9 +55,9 @@ export function CreateProviderInvoiceModal({ invoice, onClose, onSuccess }: Prop
   const [nit, setNit] = useState(provider?.nit ?? "");
   const [nrc, setNrc] = useState(provider?.numero_registro_contribuyente ?? "");
   const [email, setEmail] = useState(provider?.email ?? "");
-  const [departamento, setDepartamento] = useState("");
-  const [municipio, setMunicipio] = useState("");
-  const [direccion, setDireccion] = useState("");
+  const [departamento, setDepartamento] = useState(provider?.departamento ?? "");
+  const [municipio, setMunicipio] = useState(provider?.municipio ?? "");
+  const [direccion, setDireccion] = useState(provider?.direccion ?? "");
   const [telefono, setTelefono] = useState(provider?.telefono ?? "");
 
   const handleDepartamentoChange = (value: string) => {

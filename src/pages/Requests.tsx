@@ -27,6 +27,11 @@ type ProviderPaymentDetails = {
   dui?: string | null;
   nit?: string | null;
   numero_registro_contribuyente?: string | null;
+  /** Dirección / ubicación (users.location o direccion fiscal) */
+  location?: string | null;
+  direccion?: string | null;
+  departamento?: string | null;
+  municipio?: string | null;
 };
 
 type InProgressRequest = {
@@ -223,7 +228,7 @@ function Requests() {
         const { data: usersData } = await supabase
           .from("users")
           .select(
-            "id, name, last_name, email, cel_phone, bank_account_number, bank_name, bank_account_type, tipo_persona, dui, nit, numero_registro_contribuyente"
+            "id, name, last_name, email, cel_phone, bank_account_number, bank_name, bank_account_type, tipo_persona, dui, nit, numero_registro_contribuyente, location"
           )
           .in("id", allProviderIds);
         if (usersData) {
@@ -241,6 +246,10 @@ function Requests() {
                 dui: u.dui || null,
                 nit: u.nit || null,
                 numero_registro_contribuyente: u.numero_registro_contribuyente || null,
+                location: u.location || null,
+                direccion: u.location || null,
+                departamento: u.departamento ?? null,
+                municipio: u.municipio ?? null,
               };
               return acc;
             },
@@ -625,6 +634,9 @@ function Requests() {
                                   dui: req.provider_details.dui ?? undefined,
                                   nit: req.provider_details.nit ?? undefined,
                                   numero_registro_contribuyente: req.provider_details.numero_registro_contribuyente ?? undefined,
+                                  direccion: req.provider_details.direccion ?? req.provider_details.location ?? undefined,
+                                  departamento: req.provider_details.departamento ?? undefined,
+                                  municipio: req.provider_details.municipio ?? undefined,
                                 } : undefined,
                               });
                               setShowProviderInvoiceModal(true);
@@ -650,7 +662,6 @@ function Requests() {
                           ? req.billing_seller_amount / (1 - 0.05 - 0.05 * 0.13)
                           : null);
                       const totalAmount = req.billing_total_amount ?? null;
-                      const sellerAmount = req.billing_seller_amount ?? null;
                       const platformBuyer =
                         req.billing_platform_commission_buyer ??
                         (serviceAmount != null ? serviceAmount * 0.1 : null);

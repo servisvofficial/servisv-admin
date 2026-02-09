@@ -133,6 +133,16 @@ function Users() {
     setShowBanDialog(true)
   }
 
+  const copyToClipboard = async (text: string) => {
+    if (!text?.trim()) return
+    try {
+      await navigator.clipboard.writeText(text.trim())
+      toast({ title: 'Copiado', description: 'Dirección copiada al portapapeles.' })
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo copiar.' })
+    }
+  }
+
   const handleBanConfirm = async () => {
     if (!userToBan) return
 
@@ -321,7 +331,23 @@ function Users() {
                 <span className="capitalize text-sm font-medium">
                   {user.rol === 'provider' ? 'Proveedor' : 'Cliente'}
                 </span>
-                <span className="text-sm text-slate-700 truncate">{user.location ?? 'Sin definir'}</span>
+                <div className="min-w-0 flex items-center gap-2">
+                  <span className="text-sm text-slate-700 break-words line-clamp-2" title={user.location ?? undefined}>
+                    {user.location?.trim() || 'Sin definir'}
+                  </span>
+                  {user.location?.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(user.location!)}
+                      className="flex-shrink-0 rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                      title="Copiar dirección"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h2m8 0h2a2 2 0 012 2v2m-4 0h2a2 2 0 012 2v6a2 2 0 01-2 2h-2m-4 0h-2" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
                 <span className="text-xs font-semibold uppercase tracking-wide">
                   {user.is_banned ? (
                     <span className="text-red-600">Baneado</span>

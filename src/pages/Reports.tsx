@@ -54,6 +54,11 @@ function Reports() {
   )
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
+  const [requestChat, setRequestChat] = useState<{ id: string; client_id: string; professional_id: string } | null>(null)
+  const [requestChatMessages, setRequestChatMessages] = useState<Array<{ id: number; sender_id: string; content: string | null; type: string; created_at: string; attachment_url: string | null }>>([])
+  const [chatParticipantNames, setChatParticipantNames] = useState<Record<string, string>>({})
+  const [loadingChat, setLoadingChat] = useState(false)
+  const [chatError, setChatError] = useState<string | null>(null)
   const [resolutionForm, setResolutionForm] = useState({
     status: 'submitted',
     action_taken: 'none',
@@ -126,6 +131,80 @@ function Reports() {
     }
   }, [
     selectedReport?.id,
+    selectedReport?.reported_content_type,
+    selectedReport?.reported_content_id,
+  ])
+
+  // Cargar chat de la solicitud cuando el reporte es por una request
+  useEffect(() => {
+    if (
+      selectedReport?.reported_content_type !== 'request' ||
+      !selectedReport.reported_content_id
+    ) {
+      setRequestChat(null)
+      setRequestChatMessages([])
+      setChatParticipantNames({})
+      setChatError(null)
+      return
+    }
+    const requestId = selectedReport.reported_content_id
+    setLoadingChat(true)
+    setChatError(null)
+    ;(async () => {
+      try {
+        const { data: chatData, error: chatErr } = await supabase
+          .from('chats')
+          .select('id, client_id, professional_id')
+          .eq('request_id', requestId)
+          .maybeSingle()
+
+        if (chatErr) {
+          setChatError(chatErr.message)
+          setRequestChat(null)
+          setRequestChatMessages([])
+          setLoadingChat(false)
+          return
+        }
+        if (!chatData) {
+          setRequestChat(null)
+          setRequestChatMessages([])
+          setLoadingChat(false)
+          return
+        }
+        setRequestChat(chatData)
+
+        const { data: participants } = await supabase
+          .from('users')
+          .select('id, name, last_name')
+          .in('id', [chatData.client_id, chatData.professional_id])
+        const names: Record<string, string> = {}
+        if (participants) {
+          participants.forEach((u: { id: string; name: string; last_name: string }) => {
+            names[u.id] = [u.name, u.last_name].filter(Boolean).join(' ').trim() || u.id
+          })
+        }
+        setChatParticipantNames(names)
+
+        const { data: messagesData, error: messagesErr } = await supabase
+          .from('messages')
+          .select('id, sender_id, content, type, created_at, attachment_url')
+          .eq('chat_id', chatData.id)
+          .order('created_at', { ascending: true })
+
+        if (messagesErr) {
+          setChatError(messagesErr.message)
+          setRequestChatMessages([])
+        } else {
+          setRequestChatMessages(messagesData ?? [])
+        }
+      } catch (e) {
+        setChatError(e instanceof Error ? e.message : 'Error al cargar el chat')
+        setRequestChatMessages([])
+      } finally {
+        setLoadingChat(false)
+      }
+    })()
+  }, [
     selectedReport?.reported_content_type,
     selectedReport?.reported_content_id,
   ])
@@ -565,6 +644,19 @@ function Reports() {
                 {selectedReport.details && (
                   <p className="mt-2 text-sm text-slate-600">
                     {selectedReport.details}
+                  </p>
+                )}
+                {selectedReport.reported_content_type === 'request' && requestPreview && (
+                  <p className="mt-2 text-sm font-medium text-slate-700">
+                    Reportado por:{' '}
+                    <span className={selectedReport.reporter_id === requestPreview.client_id ? 'text-blue-600' : 'text-emerald-600'}>
+                      {selectedReport.reporter_id === requestPreview.client_id ? 'el cliente' : 'el proveedor'}
+                    </span>
+                    {selectedReport.reporter && (
+                      <span className="text-slate-500 font-normal">
+                        {' '}({selectedReport.reporter.name} {selectedReport.reporter.last_name})
+                      </span>
+                    )}
                   </p>
                 )}
               </header>
@@ -1013,6 +1105,81 @@ function Reports() {
         </div>
                           </div>
                         )}
+
+                        {/* Chat de la solicitud */}
+                        <div className="pt-4 border-t border-slate-200">
+                          <h6 className="text-sm font-semibold text-slate-700 mb-2">
+                            Chat de la solicitud
+                          </h6>
+                          <p className="text-xs text-slate-500 mb-3">
+                            Conversación entre cliente y proveedor para entender el contexto del reporte.
+                          </p>
+                          {loadingChat && (
+                            <div className="flex items-center gap-2 text-sm text-slate-500 py-4">
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
+                              Cargando mensajes...
+                            </div>
+                          )}
+                          {chatError && (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                              <p className="text-sm text-amber-800">No se pudo cargar el chat: {chatError}</p>
+                            </div>
+                          )}
+                          {!loadingChat && requestChat && requestChatMessages.length === 0 && !chatError && (
+                            <p className="text-sm text-slate-500 py-3">No hay mensajes en este chat.</p>
+                          )}
+                          {!loadingChat && requestChatMessages.length > 0 && requestChat && (
+                            <div className="rounded-xl border border-slate-200 bg-slate-50/80 flex flex-col min-h-[12rem] max-h-[28rem] overflow-y-auto overflow-x-hidden overscroll-contain">
+                              {requestChatMessages.length > 8 && (
+                                <p className="text-xs text-slate-500 px-3 py-2 border-b border-slate-200 bg-slate-100/80 sticky top-0 z-10">
+                                  {requestChatMessages.length} mensajes — desplaza para ver todo el historial
+                                </p>
+                              )}
+                              <ul className="divide-y divide-slate-200 p-3 space-y-2 flex-1">
+                                {requestChatMessages.map((msg) => {
+                                  const isClient = msg.sender_id === requestChat.client_id
+                                  const displayName = chatParticipantNames[msg.sender_id] ?? (isClient ? 'Cliente' : 'Proveedor')
+                                  return (
+                                    <li
+                                      key={msg.id}
+                                      className={`flex flex-col gap-0.5 ${isClient ? 'items-start' : 'items-end'}`}
+                                    >
+                                      <span className={`text-xs font-medium ${isClient ? 'text-blue-600' : 'text-emerald-600'}`}>
+                                        {displayName}
+                                      </span>
+                                      <span className="text-xs text-slate-500">
+                                        {new Date(msg.created_at).toLocaleString('es-AR', {
+                                          day: '2-digit',
+                                          month: 'short',
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                        })}
+                                      </span>
+                                      {msg.type === 'text' && msg.content && (
+                                        <p className="text-sm text-slate-800 whitespace-pre-wrap break-words max-w-full rounded-lg bg-white px-3 py-2 border border-slate-100 shadow-sm">
+                                          {msg.content}
+                                        </p>
+                                      )}
+                                      {msg.type !== 'text' && msg.content && (
+                                        <p className="text-sm text-slate-700 italic">[{msg.type}] {msg.content}</p>
+                                      )}
+                                      {msg.attachment_url && (
+                                        <a
+                                          href={msg.attachment_url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-xs text-purple-600 hover:underline"
+                                        >
+                                          Ver adjunto
+                                        </a>
+                                      )}
+                                    </li>
+                                  )
+                                })}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
 
                         {/* Enlace para ver la solicitud completa */}
                         <div className="pt-2 border-t border-slate-200">

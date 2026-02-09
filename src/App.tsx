@@ -11,6 +11,7 @@ const navItems = [
   { to: '/servicios', label: 'Servicios' },
   { to: '/solicitudes', label: 'Solicitudes' },
   { to: '/facturas', label: 'Facturas' },
+  { to: '/facturas-proveedor', label: 'Facturas proveedor' },
   { to: '/notas', label: 'NC/ND' },
   { to: '/eventos-dte', label: 'Eventos DTE' },
 ]

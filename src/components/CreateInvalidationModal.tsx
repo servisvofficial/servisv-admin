@@ -14,6 +14,8 @@ interface Invoice {
 
 interface Props {
   invoice: Invoice;
+  /** "billing" = factura a cliente; "provider" = factura a proveedor */
+  invoiceType?: "billing" | "provider";
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -33,7 +35,7 @@ const MOTIVOS_COMUNES = [
   "Otro",
 ];
 
-export function CreateInvalidationModal({ invoice, onClose, onSuccess }: Props) {
+export function CreateInvalidationModal({ invoice, invoiceType = "billing", onClose, onSuccess }: Props) {
   const [tipoAnulacion, setTipoAnulacion] = useState<number>(2);
   const [motivo, setMotivo] = useState("");
   const [motivoCustom, setMotivoCustom] = useState("");
@@ -87,7 +89,9 @@ export function CreateInvalidationModal({ invoice, onClose, onSuccess }: Props) 
           },
           body: JSON.stringify({
             type: "invalidacion",
-            billing_id: invoice.id,
+            ...(invoiceType === "provider"
+              ? { provider_invoice_id: invoice.id }
+              : { billing_id: invoice.id }),
             motivo: motivoCustom || motivo,
             tipo_anulacion: tipoAnulacion,
             responsable,

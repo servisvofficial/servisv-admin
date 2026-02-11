@@ -66,6 +66,7 @@ export default function Invoices() {
   const [showCreditNoteModal, setShowCreditNoteModal] = useState(false);
   const [showDebitNoteModal, setShowDebitNoteModal] = useState(false);
   const [showInvalidationModal, setShowInvalidationModal] = useState(false);
+  const [selectedRowForInvalidation, setSelectedRowForInvalidation] = useState<UnifiedRow | null>(null);
   const [contingencyLoadingId, setContingencyLoadingId] = useState<string | null>(null);
   const [duplicateLoadingId, setDuplicateLoadingId] = useState<string | null>(null);
 
@@ -117,8 +118,8 @@ export default function Invoices() {
     setShowDebitNoteModal(true);
   };
 
-  const handleInvalidateInvoice = (invoice: BillingInvoice) => {
-    setSelectedClientInvoice(invoice);
+  const handleInvalidateInvoice = (row: UnifiedRow) => {
+    setSelectedRowForInvalidation(row);
     setShowInvalidationModal(true);
   };
 
@@ -315,9 +316,9 @@ export default function Invoices() {
                               </button>
                             </>
                           )}
-                          {canInvalidate && isClient && (
+                          {canInvalidate && (
                             <button
-                              onClick={() => handleInvalidateInvoice(inv as BillingInvoice)}
+                              onClick={() => handleInvalidateInvoice(row)}
                               className="px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600"
                               title="Invalidar Documento"
                             >
@@ -501,11 +502,29 @@ export default function Invoices() {
           onSuccess={() => { setShowDebitNoteModal(false); setSelectedClientInvoice(null); refreshAll(); }}
         />
       )}
-      {showInvalidationModal && selectedClientInvoice && (
+      {showInvalidationModal && selectedRowForInvalidation && (
         <CreateInvalidationModal
-          invoice={selectedClientInvoice}
-          onClose={() => { setShowInvalidationModal(false); setSelectedClientInvoice(null); }}
-          onSuccess={() => { setShowInvalidationModal(false); setSelectedClientInvoice(null); refreshAll(); }}
+          invoice={
+            selectedRowForInvalidation.tipo === "cliente"
+              ? (selectedRowForInvalidation.raw as BillingInvoice)
+              : (() => {
+                  const p = selectedRowForInvalidation.raw as ProviderInvoice;
+                  return {
+                    id: p.id,
+                    invoice_number: p.dte_numero_control || p.id.slice(0, 12),
+                    invoice_date: p.dte_fecha_emision || p.created_at,
+                    total_amount: p.total_compra,
+                    fiscal_data: p.receptor_fiscal_data,
+                    dte_codigo_generacion: p.dte_codigo_generacion,
+                    dte_numero_control: p.dte_numero_control,
+                    dte_sello_recepcion: p.dte_sello_recepcion,
+                    dte_tipo_documento: p.dte_tipo_documento,
+                  };
+                })()
+          }
+          invoiceType={selectedRowForInvalidation.tipo === "proveedor" ? "provider" : "billing"}
+          onClose={() => { setShowInvalidationModal(false); setSelectedRowForInvalidation(null); }}
+          onSuccess={() => { setShowInvalidationModal(false); setSelectedRowForInvalidation(null); refreshAll(); }}
         />
       )}
 

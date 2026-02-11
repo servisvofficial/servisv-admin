@@ -8,6 +8,7 @@ import Requests from './pages/Requests'
 import Services from './pages/Services'
 import Users from './pages/Users'
 import Invoices from './pages/Invoices'
+import FSE from './pages/FSE'
 import CreditDebitNotes from './pages/CreditDebitNotes'
 import DTEEvents from './pages/DTEEvents'
 
@@ -43,6 +44,10 @@ export const router = createBrowserRouter([
       {
         path: 'facturas',
         element: <Invoices />,
+      },
+      {
+        path: 'fse',
+        element: <FSE />,
       },
       {
         path: 'notas',

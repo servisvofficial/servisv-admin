@@ -296,95 +296,118 @@ function Users() {
             </div>
           </div>
         </div>
-        <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-100">
-          <div className="min-w-full">
-            <div className="grid grid-cols-[2fr,1.2fr,0.8fr,1.5fr,1fr,1.2fr,140px] gap-4 bg-slate-50 px-6 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              <span>Nombre</span>
-              <span>DUI</span>
-              <span>Rol</span>
-              <span>Ubicación</span>
-              <span>Estado</span>
-              <span className="text-right">Alta</span>
-              <span className="text-center">Acciones</span>
-            </div>
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-white overflow-hidden">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[1100px] border-collapse">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 w-[18%] min-w-[180px]">Nombre</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 w-[10%] min-w-[100px]">DUI</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 w-[8%] min-w-[80px]">Rol</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 w-[22%] min-w-[200px]">Categorías</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 w-[18%] min-w-[180px]">Ubicación</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 w-[10%] min-w-[90px]">Estado</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 w-[12%] min-w-[140px]">Alta</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 w-[12%] min-w-[100px]">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
           {loading ? (
-            <p className="px-6 py-6 text-sm text-slate-500">Cargando datos…</p>
+            <tr>
+              <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-500">Cargando datos…</td>
+            </tr>
           ) : paginatedUsers.length === 0 ? (
-            <p className="px-6 py-6 text-sm text-slate-500">
-              {searchTerm ? 'No se encontraron usuarios con ese criterio de búsqueda.' : 'No hay usuarios registrados.'}
-            </p>
+            <tr>
+              <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-500">
+                {searchTerm ? 'No se encontraron usuarios con ese criterio de búsqueda.' : 'No hay usuarios registrados.'}
+              </td>
+            </tr>
           ) : (
             paginatedUsers.map((user) => (
-              <div
+              <tr
                 key={user.id}
-                className="grid grid-cols-[2fr,1.2fr,0.8fr,1.5fr,1fr,1.2fr,140px] gap-4 items-center px-6 py-5 text-sm text-slate-600 odd:bg-white border-b border-slate-100 last:border-b-0"
+                className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors"
               >
-                <div className="min-w-0">
-                  <p className="font-semibold text-slate-900 truncate">
-                    {user.name} {user.last_name}
-                  </p>
-                  <p className="text-xs text-slate-500 truncate mt-0.5">{user.email}</p>
-                </div>
-                <span className="text-sm font-mono text-slate-700 font-medium">
-                  {user.dui || '—'}
-                </span>
-                <span className="capitalize text-sm font-medium">
-                  {user.rol === 'provider' ? 'Proveedor' : 'Cliente'}
-                </span>
-                <div className="min-w-0 flex items-center gap-2">
-                  <span className="text-sm text-slate-700 break-words line-clamp-2" title={user.location ?? undefined}>
-                    {user.location?.trim() || 'Sin definir'}
-                  </span>
-                  {user.location?.trim() && (
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(user.location!)}
-                      className="flex-shrink-0 rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
-                      title="Copiar dirección"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h2m8 0h2a2 2 0 012 2v2m-4 0h2a2 2 0 012 2v6a2 2 0 01-2 2h-2m-4 0h-2" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-                <span className="text-xs font-semibold uppercase tracking-wide">
-                  {user.is_banned ? (
-                    <span className="text-red-600">Baneado</span>
-                  ) : user.is_validated ? (
-                    <span className="text-emerald-600">Validado</span>
+                <td className="px-4 py-3 align-top">
+                  <p className="font-semibold text-slate-900 text-sm leading-tight">{user.name} {user.last_name}</p>
+                  <p className="text-xs text-slate-500 mt-0.5 break-all">{user.email}</p>
+                </td>
+                <td className="px-4 py-3 align-top text-sm font-mono text-slate-700">{user.dui || '—'}</td>
+                <td className="px-4 py-3 align-top text-sm text-slate-700">{user.rol === 'provider' ? 'Proveedor' : 'Cliente'}</td>
+                <td className="px-4 py-3 align-top">
+                  {user.rol === 'provider' && user.serviceCategories && user.serviceCategories.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {user.serviceCategories.map((c, i) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700"
+                          title={c.subcategories?.length ? c.category + ': ' + c.subcategories.join(', ') : c.category}
+                        >
+                          {c.category}
+                          {c.subcategories?.length ? <span className="ml-1 text-slate-500">({c.subcategories.length})</span> : null}
+                        </span>
+                      ))}
+                    </div>
                   ) : (
-                    <span className="text-amber-600">Pendiente</span>
+                    <span className="text-slate-400 text-sm">—</span>
                   )}
-                </span>
-                <span className="text-right text-sm text-slate-500">
+                </td>
+                <td className="px-4 py-3 align-top">
+                  <div className="flex items-start gap-2">
+                    <span className="text-sm text-slate-700 break-words line-clamp-2" title={user.location ?? undefined}>
+                      {user.location?.trim() || 'Sin definir'}
+                    </span>
+                    {user.location?.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(user.location!)}
+                        className="flex-shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                        title="Copiar dirección"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h2m8 0h2a2 2 0 012 2v2m-4 0h2a2 2 0 012 2v6a2 2 0 01-2 2h-2m-4 0h-2" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </td>
+                <td className="px-4 py-3 align-top">
+                  <span className="text-xs font-semibold uppercase tracking-wide">
+                    {user.is_banned ? (
+                      <span className="text-red-600">Baneado</span>
+                    ) : user.is_validated ? (
+                      <span className="text-emerald-600">Validado</span>
+                    ) : (
+                      <span className="text-amber-600">Pendiente</span>
+                    )}
+                  </span>
+                </td>
+                <td className="px-4 py-3 align-top text-right text-sm text-slate-500 whitespace-nowrap">
                   {dateFormatter.format(new Date(user.created_at))}
-                </span>
-                <div className="flex justify-center">
+                </td>
+                <td className="px-4 py-3 align-top text-center">
                   <button
                     onClick={() => handleBanClick(user.id, `${user.name} ${user.last_name}`, user.is_banned)}
                     disabled={banning === user.id}
-                    className={`rounded-lg px-4 py-2 text-xs font-semibold transition-colors whitespace-nowrap ${
+                    className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors whitespace-nowrap ${
                       user.is_banned
                         ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
                         : 'bg-red-100 text-red-700 hover:bg-red-200'
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
-                    {banning === user.id
-                      ? 'Procesando...'
-                      : user.is_banned
-                        ? 'Desbanear'
-                        : 'Banear'}
+                    {banning === user.id ? 'Procesando...' : user.is_banned ? 'Desbanear' : 'Banear'}
                   </button>
-                </div>
-              </div>
+                </td>
+              </tr>
             ))
           )}
+            </tbody>
+          </table>
           </div>
-          
+
           {/* Paginación */}
           {!loading && filteredUsers.length > itemsPerPage && (
-            <div className="mt-6 flex items-center justify-between border-t border-slate-200 px-6 py-4">
+            <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50/50 px-6 py-4">
               <div className="text-sm text-slate-600">
                 Página {currentPage} de {totalPages}
               </div>

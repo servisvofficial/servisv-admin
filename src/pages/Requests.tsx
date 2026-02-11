@@ -85,18 +85,20 @@ function Requests() {
   const [loadingInProgress, setLoadingInProgress] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showFseModal, setShowFseModal] = useState(false);
-  const [selectedBillingForFse, setSelectedBillingForFse] = useState<
-    any | null
-  >(null);
   const [fseInvoices, setFseInvoices] = useState<any[]>([]);
   const [loadingFse, setLoadingFse] = useState(true);
   const [selectedFseForDetail, setSelectedFseForDetail] = useState<any | null>(
     null
   );
-  const [showProviderInvoiceModal, setShowProviderInvoiceModal] = useState(false);
-  const [selectedBillingForProviderInvoice, setSelectedBillingForProviderInvoice] = useState<any | null>(null);
-  const [billingsForFse, setBillingsForFse] = useState<any[]>([]);
-  const [loadingBillingsFse, setLoadingBillingsFse] = useState(false);
+  const [showProviderInvoiceModal, setShowProviderInvoiceModal] =
+    useState(false);
+  const [
+    selectedBillingForProviderInvoice,
+    setSelectedBillingForProviderInvoice,
+  ] = useState<any | null>(null);
+  const [invoiceForFseModal, setInvoiceForFseModal] = useState<any | null>(
+    null
+  );
   const [refreshInProgressKey, setRefreshInProgressKey] = useState(0);
 
   useEffect(() => {
@@ -209,7 +211,9 @@ function Requests() {
           .from("provider_invoices")
           .select("billing_id")
           .in("billing_id", billingIds);
-        billingIdsWithProviderInvoice = new Set((piData || []).map((p: any) => p.billing_id));
+        billingIdsWithProviderInvoice = new Set(
+          (piData || []).map((p: any) => p.billing_id)
+        );
       }
 
       // Paso 4: Obtener datos del proveedor para liberar pago (tabla users; los datos bancarios NO están en billing)
@@ -245,7 +249,8 @@ function Requests() {
                 tipo_persona: u.tipo_persona || null,
                 dui: u.dui || null,
                 nit: u.nit || null,
-                numero_registro_contribuyente: u.numero_registro_contribuyente || null,
+                numero_registro_contribuyente:
+                  u.numero_registro_contribuyente || null,
                 location: u.location || null,
                 direccion: u.location || null,
                 departamento: u.departamento ?? null,
@@ -282,7 +287,9 @@ function Requests() {
             quote_id: quote?.id || null,
             quote_price: quote?.price || null,
             billing_id: billing?.id || null,
-            hasProviderInvoice: billing?.id ? billingIdsWithProviderInvoice.has(billing.id) : false,
+            hasProviderInvoice: billing?.id
+              ? billingIdsWithProviderInvoice.has(billing.id)
+              : false,
             billing_total_amount: billing?.total_amount || null,
             billing_seller_amount: billing?.seller_amount || null,
             billing_description: billing?.description || null,
@@ -297,8 +304,11 @@ function Requests() {
               billing?.platform_commission_seller ?? null,
             billing_payment_gateway_commission:
               billing?.payment_gateway_commission ?? null,
-            billing_iva_amount: (billing as { iva_amount?: number } | null)?.iva_amount ?? null,
-            billing_iva_commission_seller: (billing as { iva_commission_seller?: number } | null)?.iva_commission_seller ?? null,
+            billing_iva_amount:
+              (billing as { iva_amount?: number } | null)?.iva_amount ?? null,
+            billing_iva_commission_seller:
+              (billing as { iva_commission_seller?: number } | null)
+                ?.iva_commission_seller ?? null,
             provider_details: providerDetails || null,
           };
         }
@@ -357,31 +367,6 @@ function Requests() {
     };
   }, []);
 
-  // Cargar billings para la sección "Generar FSE" (apartada de las requests)
-  useEffect(() => {
-    let ignore = false;
-
-    const fetchBillingsForFse = async () => {
-      setLoadingBillingsFse(true);
-      const { data, error } = await supabase
-        .from("billing")
-        .select("id, invoice_number, total_amount, seller_amount, description, created_at")
-        .order("created_at", { ascending: false })
-        .limit(50);
-
-      if (ignore) return;
-      if (error) {
-        console.error("Error cargando billings para FSE:", error);
-      } else {
-        setBillingsForFse(data || []);
-      }
-      setLoadingBillingsFse(false);
-    };
-
-    fetchBillingsForFse();
-    return () => { ignore = true; };
-  }, []);
-
   const stats = useMemo(() => {
     const total = requests.length;
     const active = requests.filter(request =>
@@ -416,7 +401,9 @@ function Requests() {
   }, [requests]);
 
   const fseCandidates = useMemo(() => {
-    return inProgressRequests.filter(r => !!r.billing_id && !r.hasProviderInvoice);
+    return inProgressRequests.filter(
+      r => !!r.billing_id && !r.hasProviderInvoice
+    );
   }, [inProgressRequests]);
 
   const operationalTips = useMemo(() => {
@@ -459,354 +446,419 @@ function Requests() {
 
       {/* Sección: Solicitudes con billing (Factura 01/03 al proveedor) */}
       <section className="rounded-3xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50 p-6 shadow-xl">
-          <header className="mb-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500 text-white">
-                <span className="text-xl font-bold">!</span>
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold text-slate-900">
-                  Solicitudes con Pago (billing)
-                </h3>
-                <p className="text-sm text-slate-600">
-                  {fseCandidates.length} solicitud
-                  {fseCandidates.length !== 1 ? "es" : ""} con billing. Genera
-                  Factura (01/03) por la comisión 5% que retiene la app del proveedor.
-                </p>
+        <header className="mb-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500 text-white">
+              <span className="text-xl font-bold">!</span>
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold text-slate-900">
+                Solicitudes con Pago (billing)
+              </h3>
+              <p className="text-sm text-slate-600">
+                {fseCandidates.length} solicitud
+                {fseCandidates.length !== 1 ? "es" : ""} con billing. Genera
+                Factura (01/03) por la comisión 5% que retiene la app del
+                proveedor.
+              </p>
+            </div>
+          </div>
+        </header>
+
+        <div className="space-y-4">
+          {loadingInProgress ? (
+            <p className="py-4 text-sm text-slate-500">
+              Cargando solicitudes en proceso…
+            </p>
+          ) : fseCandidates.length === 0 ? (
+            <div className="rounded-2xl border border-amber-200 bg-white p-5 text-sm text-slate-600">
+              No hay solicitudes <strong>completadas/en curso</strong> con{" "}
+              <strong>billing</strong> asociado.
+              <div className="mt-2 text-xs text-slate-500">
+                El botón FSE aparece sólo cuando existe un billing (pago
+                registrado) para esa solicitud.
               </div>
             </div>
-          </header>
-
-          <div className="space-y-4">
-            {loadingInProgress ? (
-              <p className="py-4 text-sm text-slate-500">
-                Cargando solicitudes en proceso…
-              </p>
-            ) : fseCandidates.length === 0 ? (
-              <div className="rounded-2xl border border-amber-200 bg-white p-5 text-sm text-slate-600">
-                No hay solicitudes <strong>completadas/en curso</strong> con{" "}
-                <strong>billing</strong> asociado.
-                <div className="mt-2 text-xs text-slate-500">
-                  El botón FSE aparece sólo cuando existe un billing (pago
-                  registrado) para esa solicitud.
-                </div>
-              </div>
-            ) : (
-              fseCandidates.map(req => (
-                <div
-                  key={req.id}
-                  className="rounded-2xl border border-amber-200 bg-white p-6 shadow-lg"
-                >
-                  <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                    <div className="min-w-0">
-                      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                        Solicitud
-                      </p>
-                      <p className="mt-2 font-semibold text-slate-900">
-                        {req.title}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-600">
-                        {req.service_category} ·{" "}
-                        {req.location || "Ubicación N/D"}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        Cliente: {req.client_name}
-                      </p>
-                    </div>
-
-                    <div className="min-w-0">
-                      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                        Estado del pago
-                      </p>
-                      {req.billing_id ? (
-                        <>
-                          <div className="mt-1 flex items-center gap-2">
-                            <span
-                              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
-                                req.billing_is_held
-                                  ? "bg-amber-100 text-amber-800"
-                                  : "bg-green-100 text-green-800"
-                              }`}
-                            >
-                              {req.billing_is_held
-                                ? "🔒 Retenido"
-                                : "✅ Liberado"}
-                            </span>
-                          </div>
-                          {req.billing_total_amount != null && (
-                            <p className="mt-2 text-sm font-semibold text-slate-900">
-                              Total pagado: $
-                              {Number(req.billing_total_amount).toFixed(2)} USD
-                            </p>
-                          )}
-                          {req.billing_created_at && (
-                            <p className="mt-1 text-xs text-slate-500">
-                              Pagado:{" "}
-                              {new Date(req.billing_created_at).toLocaleString(
-                                "es-AR"
-                              )}
-                            </p>
-                          )}
-                          {req.billing_released_at && (
-                            <p className="mt-1 text-xs text-green-600">
-                              Liberado:{" "}
-                              {new Date(req.billing_released_at).toLocaleString(
-                                "es-AR"
-                              )}
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <p className="mt-1 text-sm text-slate-500">
-                          Sin billing registrado
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="min-w-0">
-                      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                        Acción Requerida
-                      </p>
-                      {req.status === "completed" && req.billing_is_held ? (
-                        <div className="mt-2 rounded-lg bg-green-100 p-3">
-                          <p className="text-sm font-semibold text-green-900">
-                            ✅ Servicio Completado
-                          </p>
-                          <p className="mt-1 text-xs text-green-700">
-                            El pago puede ser liberado al proveedor.
-                          </p>
-                        </div>
-                      ) : req.billing_is_held ? (
-                        <div className="mt-2 rounded-lg bg-amber-100 p-3">
-                          <p className="text-sm font-semibold text-amber-900">
-                            ⚠️ Pago Retenido
-                          </p>
-                          <p className="mt-1 text-xs text-amber-700">
-                            El cliente debe marcar el servicio como completado
-                            para liberar el pago al proveedor.
-                          </p>
-                        </div>
-                      ) : req.billing_released_at ? (
-                        <div className="mt-2 rounded-lg bg-green-100 p-3">
-                          <p className="text-sm font-semibold text-green-900">
-                            ✅ Pago Liberado
-                          </p>
-                          <p className="mt-1 text-xs text-green-700">
-                            El pago ya fue liberado al proveedor.
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="mt-2 text-sm text-slate-500">
-                          Sin acción requerida
-                        </p>
-                      )}
-
-                      {req.billing_id && (
-                        <div className="mt-3">
-                          <button
-                            type="button"
-                            className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
-                            title="Generar Factura Consumidor Final (01) o Crédito Fiscal (03) al proveedor"
-                            onClick={() => {
-                              const billingId = req.billing_id;
-                              if (!billingId) return;
-                              const ivaCommissionSeller =
-                                req.billing_iva_commission_seller ??
-                                (req.billing_platform_commission_seller != null
-                                  ? req.billing_platform_commission_seller * 0.13
-                                  : null);
-                              setSelectedBillingForProviderInvoice({
-                                id: billingId,
-                                invoice_number: `BILL-${billingId.slice(0, 8)}`,
-                                invoice_date:
-                                  req.billing_created_at ||
-                                  new Date().toISOString(),
-                                total_amount: req.billing_total_amount || 0,
-                                seller_amount: req.billing_seller_amount,
-                                platform_commission_seller: req.billing_platform_commission_seller ?? null,
-                                iva_commission_seller: ivaCommissionSeller,
-                                description: req.billing_description,
-                                providerData: req.provider_details ? {
-                                  nombre_completo: [req.provider_details.name, req.provider_details.last_name].filter(Boolean).join(" ").trim() || undefined,
-                                  email: req.provider_details.email ?? undefined,
-                                  telefono: req.provider_details.cel_phone ?? undefined,
-                                  tipo_persona: req.provider_details.tipo_persona ?? undefined,
-                                  dui: req.provider_details.dui ?? undefined,
-                                  nit: req.provider_details.nit ?? undefined,
-                                  numero_registro_contribuyente: req.provider_details.numero_registro_contribuyente ?? undefined,
-                                  direccion: req.provider_details.direccion ?? req.provider_details.location ?? undefined,
-                                  departamento: req.provider_details.departamento ?? undefined,
-                                  municipio: req.provider_details.municipio ?? undefined,
-                                } : undefined,
-                              });
-                              setShowProviderInvoiceModal(true);
-                            }}
-                          >
-                            Factura al proveedor (01/03)
-                          </button>
-                          <p className="mt-1 text-[11px] text-slate-500">
-                            Se factura la comisión 5% que retiene la app del proveedor (no lo que se le libera).
-                          </p>
-                        </div>
-                      )}
-                    </div>
+          ) : (
+            fseCandidates.map(req => (
+              <div
+                key={req.id}
+                className="rounded-2xl border border-amber-200 bg-white p-6 shadow-lg"
+              >
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                      Solicitud
+                    </p>
+                    <p className="mt-2 font-semibold text-slate-900">
+                      {req.title}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {req.service_category} · {req.location || "Ubicación N/D"}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Cliente: {req.client_name}
+                    </p>
                   </div>
 
-                  {/* Desglose de pago: lado cliente y lado proveedor */}
-                  {req.billing_id &&
-                    (() => {
-                      const serviceAmount =
-                        req.billing_service_amount ??
-                        req.quote_price ??
-                        (req.billing_seller_amount != null
-                          ? req.billing_seller_amount / (1 - 0.05 - 0.05 * 0.13)
-                          : null);
-                      const totalAmount = req.billing_total_amount ?? null;
-                      const platformBuyer =
-                        req.billing_platform_commission_buyer ??
-                        (serviceAmount != null ? serviceAmount * 0.1 : null);
-                      const platformSeller =
-                        req.billing_platform_commission_seller ?? null;
-                      const gatewayCommission =
-                        req.billing_payment_gateway_commission ?? null;
-                      const ivaCommissionSeller =
-                        req.billing_iva_commission_seller ??
-                        (platformSeller != null ? platformSeller * 0.13 : null);
-                      const ivaOnBuyer =
-                        req.billing_iva_amount ??
-                        ((platformBuyer ?? 0) + (gatewayCommission ?? 0) > 0
-                          ? ((platformBuyer ?? 0) + (gatewayCommission ?? 0)) * 0.13
-                          : null);
-                      // A liberar = servicio - comisión 5% - IVA 13% sobre esa comisión (siempre calcular para mostrar correcto)
-                      const amountToRelease =
-                        serviceAmount != null && platformSeller != null && ivaCommissionSeller != null
-                          ? serviceAmount - platformSeller - ivaCommissionSeller
-                          : req.billing_seller_amount;
-                      const display = (n: number | null) =>
-                        n != null ? Number(n).toFixed(2) : "—";
-                      return (
-                        <div className="mt-6 border-t border-slate-200 pt-6">
-                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">
-                            Desglose de pago
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                      Estado del pago
+                    </p>
+                    {req.billing_id ? (
+                      <>
+                        <div className="mt-1 flex items-center gap-2">
+                          <span
+                            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                              req.billing_is_held
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-green-100 text-green-800"
+                            }`}
+                          >
+                            {req.billing_is_held
+                              ? "🔒 Retenido"
+                              : "✅ Liberado"}
+                          </span>
+                        </div>
+                        {req.billing_total_amount != null && (
+                          <p className="mt-2 text-sm font-semibold text-slate-900">
+                            Total pagado: $
+                            {Number(req.billing_total_amount).toFixed(2)} USD
                           </p>
-                          <div className="mt-4 grid gap-6 sm:grid-cols-2">
-                            <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
-                              <p className="text-xs font-semibold text-blue-700">
-                                Lado cliente
-                              </p>
-                              <div className="mt-3 space-y-2 text-sm">
-                                <div className="flex justify-between">
-                                  <span className="text-slate-500">Monto servicio</span>
-                                  <span className="font-medium">${display(serviceAmount)} USD</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-500">Comisión plataforma (10%)</span>
-                                  <span className="font-medium">${display(platformBuyer)} USD</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-500">Comisión pasarela</span>
-                                  <span className="font-medium">${display(gatewayCommission)} USD</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-500">IVA (13% sobre comisiones cliente)</span>
-                                  <span className="font-medium">${display(ivaOnBuyer)} USD</span>
-                                </div>
-                                <div className="flex justify-between border-t border-slate-200 pt-2">
-                                  <span className="font-medium text-slate-700">Total pagado por cliente</span>
-                                  <span className="font-semibold">${display(totalAmount)} USD</span>
-                                </div>
+                        )}
+                        {req.billing_created_at && (
+                          <p className="mt-1 text-xs text-slate-500">
+                            Pagado:{" "}
+                            {new Date(req.billing_created_at).toLocaleString(
+                              "es-AR"
+                            )}
+                          </p>
+                        )}
+                        {req.billing_released_at && (
+                          <p className="mt-1 text-xs text-green-600">
+                            Liberado:{" "}
+                            {new Date(req.billing_released_at).toLocaleString(
+                              "es-AR"
+                            )}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="mt-1 text-sm text-slate-500">
+                        Sin billing registrado
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                      Acción Requerida
+                    </p>
+                    {req.status === "completed" && req.billing_is_held ? (
+                      <div className="mt-2 rounded-lg bg-green-100 p-3">
+                        <p className="text-sm font-semibold text-green-900">
+                          ✅ Servicio Completado
+                        </p>
+                        <p className="mt-1 text-xs text-green-700">
+                          El pago puede ser liberado al proveedor.
+                        </p>
+                      </div>
+                    ) : req.billing_is_held ? (
+                      <div className="mt-2 rounded-lg bg-amber-100 p-3">
+                        <p className="text-sm font-semibold text-amber-900">
+                          ⚠️ Pago Retenido
+                        </p>
+                        <p className="mt-1 text-xs text-amber-700">
+                          El cliente debe marcar el servicio como completado
+                          para liberar el pago al proveedor.
+                        </p>
+                      </div>
+                    ) : req.billing_released_at ? (
+                      <div className="mt-2 rounded-lg bg-green-100 p-3">
+                        <p className="text-sm font-semibold text-green-900">
+                          ✅ Pago Liberado
+                        </p>
+                        <p className="mt-1 text-xs text-green-700">
+                          El pago ya fue liberado al proveedor.
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-sm text-slate-500">
+                        Sin acción requerida
+                      </p>
+                    )}
+
+                    {req.billing_id && (
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+                          title="Generar Factura Consumidor Final (01) o Crédito Fiscal (03) al proveedor"
+                          onClick={() => {
+                            const billingId = req.billing_id;
+                            if (!billingId) return;
+                            const ivaCommissionSeller =
+                              req.billing_iva_commission_seller ??
+                              (req.billing_platform_commission_seller != null
+                                ? req.billing_platform_commission_seller * 0.13
+                                : null);
+                            setSelectedBillingForProviderInvoice({
+                              id: billingId,
+                              invoice_number: `BILL-${billingId.slice(0, 8)}`,
+                              invoice_date:
+                                req.billing_created_at ||
+                                new Date().toISOString(),
+                              total_amount: req.billing_total_amount || 0,
+                              seller_amount: req.billing_seller_amount,
+                              platform_commission_seller:
+                                req.billing_platform_commission_seller ?? null,
+                              iva_commission_seller: ivaCommissionSeller,
+                              description: req.billing_description,
+                              providerData: req.provider_details
+                                ? {
+                                    nombre_completo:
+                                      [
+                                        req.provider_details.name,
+                                        req.provider_details.last_name,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(" ")
+                                        .trim() || undefined,
+                                    email:
+                                      req.provider_details.email ?? undefined,
+                                    telefono:
+                                      req.provider_details.cel_phone ??
+                                      undefined,
+                                    tipo_persona:
+                                      req.provider_details.tipo_persona ??
+                                      undefined,
+                                    dui: req.provider_details.dui ?? undefined,
+                                    nit: req.provider_details.nit ?? undefined,
+                                    numero_registro_contribuyente:
+                                      req.provider_details
+                                        .numero_registro_contribuyente ??
+                                      undefined,
+                                    direccion:
+                                      req.provider_details.direccion ??
+                                      req.provider_details.location ??
+                                      undefined,
+                                    departamento:
+                                      req.provider_details.departamento ??
+                                      undefined,
+                                    municipio:
+                                      req.provider_details.municipio ??
+                                      undefined,
+                                  }
+                                : undefined,
+                            });
+                            setShowProviderInvoiceModal(true);
+                          }}
+                        >
+                          Factura al proveedor (01/03)
+                        </button>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          Se factura la comisión 5% que retiene la app del
+                          proveedor (no lo que se le libera).
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Desglose de pago: lado cliente y lado proveedor */}
+                {req.billing_id &&
+                  (() => {
+                    const serviceAmount =
+                      req.billing_service_amount ??
+                      req.quote_price ??
+                      (req.billing_seller_amount != null
+                        ? req.billing_seller_amount / (1 - 0.05 - 0.05 * 0.13)
+                        : null);
+                    const totalAmount = req.billing_total_amount ?? null;
+                    const platformBuyer =
+                      req.billing_platform_commission_buyer ??
+                      (serviceAmount != null ? serviceAmount * 0.1 : null);
+                    const platformSeller =
+                      req.billing_platform_commission_seller ?? null;
+                    const gatewayCommission =
+                      req.billing_payment_gateway_commission ?? null;
+                    const ivaCommissionSeller =
+                      req.billing_iva_commission_seller ??
+                      (platformSeller != null ? platformSeller * 0.13 : null);
+                    const ivaOnBuyer =
+                      req.billing_iva_amount ??
+                      ((platformBuyer ?? 0) + (gatewayCommission ?? 0) > 0
+                        ? ((platformBuyer ?? 0) + (gatewayCommission ?? 0)) *
+                          0.13
+                        : null);
+                    // A liberar = servicio - comisión 5% - IVA 13% sobre esa comisión (siempre calcular para mostrar correcto)
+                    const amountToRelease =
+                      serviceAmount != null &&
+                      platformSeller != null &&
+                      ivaCommissionSeller != null
+                        ? serviceAmount - platformSeller - ivaCommissionSeller
+                        : req.billing_seller_amount;
+                    const display = (n: number | null) =>
+                      n != null ? Number(n).toFixed(2) : "—";
+                    return (
+                      <div className="mt-6 border-t border-slate-200 pt-6">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">
+                          Desglose de pago
+                        </p>
+                        <div className="mt-4 grid gap-6 sm:grid-cols-2">
+                          <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
+                            <p className="text-xs font-semibold text-blue-700">
+                              Lado cliente
+                            </p>
+                            <div className="mt-3 space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">
+                                  Monto servicio
+                                </span>
+                                <span className="font-medium">
+                                  ${display(serviceAmount)} USD
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">
+                                  Comisión plataforma (10%)
+                                </span>
+                                <span className="font-medium">
+                                  ${display(platformBuyer)} USD
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">
+                                  Comisión pasarela
+                                </span>
+                                <span className="font-medium">
+                                  ${display(gatewayCommission)} USD
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">
+                                  IVA (13% sobre comisiones cliente)
+                                </span>
+                                <span className="font-medium">
+                                  ${display(ivaOnBuyer)} USD
+                                </span>
+                              </div>
+                              <div className="flex justify-between border-t border-slate-200 pt-2">
+                                <span className="font-medium text-slate-700">
+                                  Total pagado por cliente
+                                </span>
+                                <span className="font-semibold">
+                                  ${display(totalAmount)} USD
+                                </span>
                               </div>
                             </div>
-                            <div className="rounded-lg border border-slate-200 bg-emerald-50/50 p-4">
-                              <p className="text-xs font-semibold text-emerald-800">
-                                Lado proveedor
-                              </p>
-                              <div className="mt-3 space-y-2 text-sm">
-                                <div className="flex justify-between">
-                                  <span className="text-slate-500">Monto servicio (referencia)</span>
-                                  <span className="font-medium">${display(serviceAmount)} USD</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-500">Comisión 5% (retiene la app)</span>
-                                  <span className="font-medium">${display(platformSeller)} USD</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-500">IVA 13% sobre comisión</span>
-                                  <span className="font-medium">${display(ivaCommissionSeller)} USD</span>
-                                </div>
-                                <div className="flex justify-between border-t border-slate-200 pt-2">
-                                  <span className="font-medium text-slate-700">A liberar al proveedor</span>
-                                  <span className="font-semibold text-emerald-700">${display(amountToRelease)} USD</span>
-                                </div>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-emerald-50/50 p-4">
+                            <p className="text-xs font-semibold text-emerald-800">
+                              Lado proveedor
+                            </p>
+                            <div className="mt-3 space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">
+                                  Monto servicio (referencia)
+                                </span>
+                                <span className="font-medium">
+                                  ${display(serviceAmount)} USD
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">
+                                  Comisión 5% (retiene la app)
+                                </span>
+                                <span className="font-medium">
+                                  ${display(platformSeller)} USD
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">
+                                  IVA 13% sobre comisión
+                                </span>
+                                <span className="font-medium">
+                                  ${display(ivaCommissionSeller)} USD
+                                </span>
+                              </div>
+                              <div className="flex justify-between border-t border-slate-200 pt-2">
+                                <span className="font-medium text-slate-700">
+                                  A liberar al proveedor
+                                </span>
+                                <span className="font-semibold text-emerald-700">
+                                  ${display(amountToRelease)} USD
+                                </span>
                               </div>
                             </div>
                           </div>
                         </div>
-                      );
-                    })()}
+                      </div>
+                    );
+                  })()}
 
-                  {/* Datos del proveedor para liberar pago (solo en tabla users, no en billing) */}
-                  {(req.provider_details || req.seller_name) && (
-                    <div className="mt-6 border-t border-slate-200 pt-6">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">
-                        Datos del proveedor para liberar pago
+                {/* Datos del proveedor para liberar pago (solo en tabla users, no en billing) */}
+                {(req.provider_details || req.seller_name) && (
+                  <div className="mt-6 border-t border-slate-200 pt-6">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">
+                      Datos del proveedor para liberar pago
+                    </p>
+                    {(!req.provider_details ||
+                      (!req.provider_details.bank_account_number &&
+                        !req.provider_details.bank_name)) && (
+                      <p className="mt-2 text-xs text-amber-700">
+                        {req.provider_details
+                          ? "El proveedor no ha completado datos bancarios en su perfil. Debe añadirlos en la app (Perfil → Editar perfil) o en la web para poder liberar el pago."
+                          : "No se pudo cargar el perfil del proveedor. Comprueba que el admin use VITE_SUPABASE_SERVICE_ROLE_KEY para leer la tabla users, o que el proveedor exista en users con el mismo id que en la quote."}
                       </p>
-                      {(!req.provider_details ||
-                        (!req.provider_details.bank_account_number &&
-                          !req.provider_details.bank_name)) && (
-                        <p className="mt-2 text-xs text-amber-700">
+                    )}
+                    <div className="mt-4 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-slate-500">Nombre</span>
+                        <span className="font-medium text-slate-900">
                           {req.provider_details
-                            ? "El proveedor no ha completado datos bancarios en su perfil. Debe añadirlos en la app (Perfil → Editar perfil) o en la web para poder liberar el pago."
-                            : "No se pudo cargar el perfil del proveedor. Comprueba que el admin use VITE_SUPABASE_SERVICE_ROLE_KEY para leer la tabla users, o que el proveedor exista en users con el mismo id que en la quote."}
-                        </p>
-                      )}
-                      <div className="mt-4 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-slate-500">Nombre</span>
-                          <span className="font-medium text-slate-900">
-                            {req.provider_details
-                              ? `${req.provider_details.name} ${req.provider_details.last_name}`.trim() ||
-                                "—"
-                              : req.seller_name || "—"}
-                          </span>
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-slate-500">Nº cuenta</span>
-                          <span className="font-medium text-slate-900">
-                            {req.provider_details?.bank_account_number || "—"}
-                          </span>
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-slate-500">Banco</span>
-                          <span className="font-medium text-slate-900">
-                            {req.provider_details?.bank_name || "—"}
-                          </span>
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-slate-500">Tipo cuenta</span>
-                          <span className="font-medium text-slate-900">
-                            {req.provider_details?.bank_account_type || "—"}
-                          </span>
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-slate-500">Email</span>
-                          <span className="font-medium text-slate-900">
-                            {req.provider_details?.email || "—"}
-                          </span>
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-slate-500">Teléfono</span>
-                          <span className="font-medium text-slate-900">
-                            {req.provider_details?.cel_phone || "—"}
-                          </span>
-                        </div>
+                            ? `${req.provider_details.name} ${req.provider_details.last_name}`.trim() ||
+                              "—"
+                            : req.seller_name || "—"}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-slate-500">Nº cuenta</span>
+                        <span className="font-medium text-slate-900">
+                          {req.provider_details?.bank_account_number || "—"}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-slate-500">Banco</span>
+                        <span className="font-medium text-slate-900">
+                          {req.provider_details?.bank_name || "—"}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-slate-500">Tipo cuenta</span>
+                        <span className="font-medium text-slate-900">
+                          {req.provider_details?.bank_account_type || "—"}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-slate-500">Email</span>
+                        <span className="font-medium text-slate-900">
+                          {req.provider_details?.email || "—"}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-slate-500">Teléfono</span>
+                        <span className="font-medium text-slate-900">
+                          {req.provider_details?.cel_phone || "—"}
+                        </span>
                       </div>
                     </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
       </section>
 
       {showProviderInvoiceModal && selectedBillingForProviderInvoice && (
@@ -823,16 +875,16 @@ function Requests() {
           }}
         />
       )}
-      {showFseModal && selectedBillingForFse && (
+      {showFseModal && (
         <CreateFSEModal
-          invoice={selectedBillingForFse}
+          invoice={invoiceForFseModal}
           onClose={() => {
             setShowFseModal(false);
-            setSelectedBillingForFse(null);
+            setInvoiceForFseModal(null);
           }}
           onSuccess={async () => {
             setShowFseModal(false);
-            setSelectedBillingForFse(null);
+            setInvoiceForFseModal(null);
             // Recargar FSE después de crear una nueva
             const { data } = await supabase
               .from("fse_invoices")
@@ -955,7 +1007,7 @@ function Requests() {
         </div>
       </section>
 
-      {/* Sección aparte: Generar FSE (14) - Cuando ServiSV contrata un servicio a un proveedor */}
+      {/* Sección aparte: Generar FSE (14) - Cuando ServiSV contrata un servicio externo */}
       <section className="rounded-3xl border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 to-teal-50 p-6 shadow-xl">
         <header className="mb-6">
           <div className="flex items-center gap-3">
@@ -964,77 +1016,30 @@ function Requests() {
             </div>
             <div>
               <h3 className="text-xl font-semibold text-slate-900">
-                Generar FSE (14) – Cuando ServiSV contrata un servicio a un proveedor
+                Generar FSE (14)
               </h3>
-              <p className="text-sm text-slate-600">
-                La FSE no va por solicitud. Selecciona un billing y genera la Factura de Sujeto Excluido aquí.
-              </p>
             </div>
           </div>
         </header>
 
-        <div className="mb-6 overflow-hidden rounded-2xl border border-emerald-100 bg-white">
-          {loadingBillingsFse ? (
-            <p className="px-6 py-6 text-sm text-slate-500">Cargando billings…</p>
-          ) : billingsForFse.length === 0 ? (
-            <p className="px-6 py-6 text-sm text-slate-500">No hay billings para generar FSE.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-emerald-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Billing</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Fecha</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Total</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">A proveedor</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Acción</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {billingsForFse.map((b: any) => (
-                    <tr key={b.id} className="hover:bg-emerald-50/50">
-                      <td className="px-4 py-3 font-mono text-sm text-slate-700">
-                        {b.invoice_number || b.id.slice(0, 8)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-600">
-                        {b.created_at ? new Date(b.created_at).toLocaleDateString("es-AR") : "—"}
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-slate-900">
-                        ${Number(b.total_amount || 0).toFixed(2)} USD
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        ${Number(b.seller_amount ?? b.total_amount ?? 0).toFixed(2)} USD
-                      </td>
-                      <td className="px-4 py-3">
-                        <button
-                          type="button"
-                          className="inline-flex items-center rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
-                          onClick={() => {
-                            setSelectedBillingForFse({
-                              id: b.id,
-                              invoice_number: b.invoice_number || `BILL-${b.id.slice(0, 8)}`,
-                              invoice_date: b.created_at || new Date().toISOString(),
-                              total_amount: b.total_amount || 0,
-                              seller_amount: b.seller_amount,
-                              description: b.description,
-                              fiscal_data: {},
-                            });
-                            setShowFseModal(true);
-                          }}
-                        >
-                          Generar FSE (14)
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+        <div className="mb-6">
+          <button
+            type="button"
+            onClick={() => {
+              setInvoiceForFseModal(null);
+              setShowFseModal(true);
+            }}
+            className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-base font-semibold text-white shadow-md hover:bg-emerald-700 transition-colors"
+          >
+            <span className="text-lg">14</span>
+            Generar FSE (Factura de Sujeto Excluido)
+          </button>
         </div>
 
         <header className="mb-3 mt-8">
-          <h4 className="text-lg font-semibold text-slate-900">FSE ya generadas</h4>
+          <h4 className="text-lg font-semibold text-slate-900">
+            FSE ya generadas
+          </h4>
         </header>
 
         <div className="overflow-hidden rounded-2xl border border-emerald-100 bg-white">

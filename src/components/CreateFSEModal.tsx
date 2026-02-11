@@ -16,7 +16,8 @@ interface Invoice {
 }
 
 interface Props {
-  invoice: Invoice;
+  /** Opcional: cuando ServiSV genera FSE sin asociar a un billing (servicio externo) */
+  invoice: Invoice | null;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -82,9 +83,9 @@ export function CreateFSEModal({ invoice, onClose, onSuccess }: Props) {
         },
         body: JSON.stringify({
           type: "factura_sujeto_excluido",
-          billing_id: invoice.id,
+          billing_id: invoice?.id ?? null,
           observaciones: observaciones || null,
-          descripcion: descripcion || invoice.description || null,
+          descripcion: descripcion || invoice?.description || null,
           total_compra: total,
           rete_renta: Number(reteRenta || 0),
           iva_rete1: Number(ivaRete1 || 0),
@@ -149,26 +150,34 @@ export function CreateFSEModal({ invoice, onClose, onSuccess }: Props) {
             </div>
 
             <div className="p-6 overflow-y-auto flex-1">
-              <div className="bg-emerald-50 border-2 border-emerald-200 rounded-xl p-5 mb-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-xs text-emerald-700 font-medium uppercase tracking-wide mb-1">Factura</div>
-                    <div className="text-sm font-semibold text-gray-900">{invoice.invoice_number}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-emerald-700 font-medium uppercase tracking-wide mb-1">Fecha</div>
-                    <div className="text-sm font-semibold text-gray-900">
-                      {format(new Date(invoice.invoice_date), "dd/MM/yyyy", { locale: es })}
+              {invoice ? (
+                <div className="bg-emerald-50 border-2 border-emerald-200 rounded-xl p-5 mb-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-xs text-emerald-700 font-medium uppercase tracking-wide mb-1">Factura</div>
+                      <div className="text-sm font-semibold text-gray-900">{invoice.invoice_number}</div>
                     </div>
-                  </div>
-                  <div className="col-span-2">
-                    <div className="text-xs text-emerald-700 font-medium uppercase tracking-wide mb-1">Sujeto Excluido</div>
-                    <div className="text-sm font-semibold text-gray-900 truncate">
-                      (Proveedor) Completar manualmente abajo
+                    <div>
+                      <div className="text-xs text-emerald-700 font-medium uppercase tracking-wide mb-1">Fecha</div>
+                      <div className="text-sm font-semibold text-gray-900">
+                        {format(new Date(invoice.invoice_date), "dd/MM/yyyy", { locale: es })}
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <div className="text-xs text-emerald-700 font-medium uppercase tracking-wide mb-1">Sujeto Excluido</div>
+                      <div className="text-sm font-semibold text-gray-900 truncate">
+                        (Proveedor) Completar manualmente abajo
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="bg-emerald-50 border-2 border-emerald-200 rounded-xl p-5 mb-6">
+                  <p className="text-sm text-emerald-800">
+                    Cuando <strong>ServiSV</strong> contrata un servicio externo, genera aquí la Factura de Sujeto Excluido (FSE). Completa los datos del proveedor y el monto abajo.
+                  </p>
+                </div>
+              )}
 
               {error && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
@@ -188,13 +197,15 @@ export function CreateFSEModal({ invoice, onClose, onSuccess }: Props) {
                       min="0.01"
                       value={totalCompra}
                       onChange={(e) => setTotalCompra(e.target.value)}
-                      placeholder={String(invoice.seller_amount ?? invoice.total_amount ?? 0)}
+                      placeholder={invoice ? String(invoice.seller_amount ?? invoice.total_amount ?? 0) : "0.00"}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       required
                     />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Sugerido: ${Number(invoice.seller_amount ?? invoice.total_amount ?? 0).toFixed(2)}
-                    </p>
+                    {invoice && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Sugerido: ${Number(invoice.seller_amount ?? invoice.total_amount ?? 0).toFixed(2)}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -205,7 +216,7 @@ export function CreateFSEModal({ invoice, onClose, onSuccess }: Props) {
                       value={descripcion}
                       onChange={(e) => setDescripcion(e.target.value)}
                       maxLength={1000}
-                      placeholder={invoice.description || "Servicio adquirido a sujeto excluido"}
+                      placeholder={invoice?.description || "Servicio adquirido a sujeto excluido (ej. consultoría, mantenimiento)"}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>

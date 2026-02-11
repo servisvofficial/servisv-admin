@@ -267,7 +267,6 @@ export default function Invoices() {
                   const fecha = isClient ? (inv as BillingInvoice).invoice_date : (inv as ProviderInvoice).created_at;
                   const codigo = inv.dte_codigo_generacion;
                   const sello = inv.dte_sello_recepcion;
-                  const estado = inv.dte_estado ?? null;
                   const canInvalidate = codigo && sello;
                   const hasCodigo = Boolean(codigo);
                   const loadingContingency = contingencyLoadingId === inv.id;

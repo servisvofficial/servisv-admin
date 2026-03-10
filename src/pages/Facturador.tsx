@@ -1,6 +1,59 @@
 import { useState, useMemo, useEffect } from "react";
 import { DEPARTAMENTOS, getMunicipios } from "../data/departamentosMunicipios";
 
+// Catálogo de actividades económicas (Ministerio de Hacienda El Salvador)
+const ACTIVIDADES_ECONOMICAS = [
+  { codigo: "62010", descripcion: "PORTALES WEB" },
+  { codigo: "62020", descripcion: "DISEÑO Y DESARROLLO DE SOFTWARE" },
+  { codigo: "62090", descripcion: "OTRAS ACTIVIDADES DE TECNOLOGÍA DE LA INFORMACIÓN" },
+  { codigo: "63110", descripcion: "PROCESAMIENTO DE DATOS" },
+  { codigo: "63120", descripcion: "PORTALES WEB Y HOSPEDAJE" },
+  { codigo: "70200", descripcion: "ACTIVIDADES DE CONSULTORÍA DE GESTIÓN" },
+  { codigo: "71100", descripcion: "ACTIVIDADES DE ARQUITECTURA E INGENIERÍA" },
+  { codigo: "73200", descripcion: "ESTUDIOS DE MERCADO Y ENCUESTAS DE OPINIÓN PÚBLICA" },
+  { codigo: "74900", descripcion: "OTRAS ACTIVIDADES PROFESIONALES, CIENTÍFICAS Y TÉCNICAS" },
+  { codigo: "77100", descripcion: "ALQUILER Y ARRENDAMIENTO DE VEHÍCULOS AUTOMOTORES" },
+  { codigo: "77200", descripcion: "ALQUILER DE EFECTOS PERSONALES Y ENSERES DOMÉSTICOS" },
+  { codigo: "77300", descripcion: "ALQUILER DE MAQUINARIA, EQUIPO Y BIENES TANGIBLES" },
+  { codigo: "77400", descripcion: "ARRENDAMIENTO DE PROPIEDAD INTELECTUAL Y SIMILARES" },
+  { codigo: "78100", descripcion: "ACTIVIDADES DE AGENCIAS DE EMPLEO" },
+  { codigo: "78200", descripcion: "ACTIVIDADES DE AGENCIAS DE EMPLEO TEMPORAL" },
+  { codigo: "79100", descripcion: "ACTIVIDADES DE AGENCIAS DE VIAJES" },
+  { codigo: "79900", descripcion: "OTRAS ACTIVIDADES DE SERVICIOS DE RESERVAS Y ACTIVIDADES RELACIONADAS" },
+  { codigo: "80100", descripcion: "ACTIVIDADES DE SEGURIDAD PRIVADA" },
+  { codigo: "80200", descripcion: "ACTIVIDADES DE SERVICIOS DE SISTEMAS DE SEGURIDAD" },
+  { codigo: "80300", descripcion: "ACTIVIDADES DE INVESTIGACIÓN" },
+  { codigo: "82110", descripcion: "ACTIVIDADES COMBINADAS DE APOYO A INSTALACIONES" },
+  { codigo: "82190", descripcion: "OTRAS ACTIVIDADES DE APOYO A EMPRESAS" },
+  { codigo: "82200", descripcion: "ACTIVIDADES DE CENTROS DE LLAMADAS" },
+  { codigo: "82300", descripcion: "ORGANIZACIÓN DE CONVENCIONES Y FERIAS DE MUESTRAS" },
+  { codigo: "82910", descripcion: "ACTIVIDADES DE AGENCIAS DE COBRO Y OFICINAS DE INFORMACIÓN COMERCIAL" },
+  { codigo: "82920", descripcion: "ACTIVIDADES DE ENVASADO Y EMPAQUE" },
+  { codigo: "82990", descripcion: "OTRAS ACTIVIDADES DE APOYO A EMPRESAS N.C.P." },
+  { codigo: "85500", descripcion: "OTRAS ACTIVIDADES DE ENSEÑANZA" },
+  { codigo: "90000", descripcion: "ACTIVIDADES CREATIVAS, ARTÍSTICAS Y DE ENTRETENIMIENTO" },
+  { codigo: "91010", descripcion: "ACTIVIDADES DE BIBLIOTECAS Y ARCHIVOS" },
+  { codigo: "91020", descripcion: "ACTIVIDADES DE MUSEOS Y CONSERVACIÓN DE LUGARES Y EDIFICIOS HISTÓRICOS" },
+  { codigo: "91030", descripcion: "ACTIVIDADES DE JARDINES BOTÁNICOS Y ZOOLÓGICOS Y RESERVAS NATURALES" },
+  { codigo: "92000", descripcion: "ACTIVIDADES DE JUEGOS DE AZAR Y APUESTAS" },
+  { codigo: "93110", descripcion: "GESTIÓN DE INSTALACIONES DEPORTIVAS" },
+  { codigo: "93120", descripcion: "ACTIVIDADES DE CLUBES DEPORTIVOS" },
+  { codigo: "93130", descripcion: "ACTIVIDADES DE GIMNASIOS" },
+  { codigo: "93190", descripcion: "OTRAS ACTIVIDADES DEPORTIVAS" },
+  { codigo: "93210", descripcion: "ACTIVIDADES DE PARQUES DE ATRACCIONES Y PARQUES TEMÁTICOS" },
+  { codigo: "93290", descripcion: "OTRAS ACTIVIDADES DE ESPARCIMIENTO Y RECREATIVAS" },
+  { codigo: "94110", descripcion: "ACTIVIDADES DE ASOCIACIONES EMPRESARIALES Y DE EMPLEADORES" },
+  { codigo: "94120", descripcion: "ACTIVIDADES DE ASOCIACIONES PROFESIONALES" },
+  { codigo: "94200", descripcion: "ACTIVIDADES DE SINDICATOS" },
+  { codigo: "94910", descripcion: "ACTIVIDADES DE ORGANIZACIONES RELIGIOSAS" },
+  { codigo: "94920", descripcion: "ACTIVIDADES DE ORGANIZACIONES POLÍTICAS" },
+  { codigo: "94990", descripcion: "ACTIVIDADES DE OTRAS ORGANIZACIONES DE AFILIACIÓN" },
+  { codigo: "96010", descripcion: "LAVADO Y LIMPIEZA DE PRENDAS DE TELA Y DE PIEL" },
+  { codigo: "96020", descripcion: "PELUQUERÍA Y OTROS TRATAMIENTOS DE BELLEZA" },
+  { codigo: "96030", descripcion: "POMPAS FÚNEBRES Y ACTIVIDADES CONEXAS" },
+  { codigo: "96090", descripcion: "OTRAS ACTIVIDADES DE SERVICIOS PERSONALES" },
+];
+
 interface StandaloneInvoiceResult {
   codigoGeneracion: string;
   numeroControl: string;
@@ -29,6 +82,8 @@ export default function Facturador() {
   const [dui, setDui] = useState("");
   const [nit, setNit] = useState("");
   const [nrc, setNrc] = useState("");
+  const [codActividad, setCodActividad] = useState("");
+  const [descActividad, setDescActividad] = useState("");
   const [departamento, setDepartamento] = useState("");
   const [municipio, setMunicipio] = useState("");
   const [direccion, setDireccion] = useState("");
@@ -104,6 +159,10 @@ export default function Facturador() {
         setError("Para Crédito Fiscal (03) el NRC es requerido");
         return;
       }
+      if (tipoDte === "03" && !codActividad.trim()) {
+        setError("Para Crédito Fiscal (03) el Código de Actividad Económica es requerido");
+        return;
+      }
       if (!departamento || !municipio || !direccion.trim()) {
         setError("Dirección completa (departamento, municipio y complemento) es requerida");
         return;
@@ -125,6 +184,8 @@ export default function Facturador() {
           dui: dui.trim() || undefined,
           nit: nit.trim() || undefined,
           numero_registro_contribuyente: tipoDte === "03" ? nrc.trim() : undefined,
+          cod_actividad: codActividad.trim() || undefined,
+          desc_actividad: descActividad.trim() || undefined,
           direccion: direccion.trim(),
           departamento,
           municipio,
@@ -397,7 +458,40 @@ export default function Facturador() {
                         type="text"
                         value={nrc}
                         onChange={(e) => setNrc(e.target.value)}
+                        placeholder="Ej: 12345678 (máximo 8 dígitos)"
+                        maxLength={8}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      />
+                    </div>
+                  )}
+                  {tipoDte === "03" && (
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Código de Actividad Económica *</label>
+                      <select
+                        value={codActividad}
+                        onChange={(e) => {
+                          const selected = ACTIVIDADES_ECONOMICAS.find(a => a.codigo === e.target.value);
+                          setCodActividad(e.target.value);
+                          setDescActividad(selected?.descripcion || "");
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      >
+                        <option value="">Selecciona una actividad económica</option>
+                        {ACTIVIDADES_ECONOMICAS.map(a => (
+                          <option key={a.codigo} value={a.codigo}>{a.codigo} - {a.descripcion}</option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-500 mt-1">Requerido para Crédito Fiscal (CCF)</p>
+                    </div>
+                  )}
+                  {tipoDte === "03" && descActividad && (
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Descripción de Actividad Económica</label>
+                      <input
+                        type="text"
+                        value={descActividad}
+                        readOnly
+                        className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-md text-gray-600"
                       />
                     </div>
                   )}

@@ -100,12 +100,8 @@ export default function Invoices() {
   const loading = loadingBilling || loadingProvider || loadingFacturador;
   const error = billingError || errorProvider || errorFacturador;
 
-  // Facturas a cliente: solo billings que NO tienen provider_invoice (evita duplicar facturas a proveedor)
-  const billingIdsConProvider = new Set(providerInvoices.map((p) => p.billing_id));
-  const billingSoloCliente = billingInvoices.filter((b) => !billingIdsConProvider.has(b.id));
-
   const unifiedRows: UnifiedRow[] = [
-    ...billingSoloCliente.map((inv) => ({ tipo: "cliente" as const, raw: inv })),
+    ...billingInvoices.map((inv) => ({ tipo: "cliente" as const, raw: inv })),
     ...providerInvoices.map((inv) => ({ tipo: "proveedor" as const, raw: inv })),
     ...facturadorInvoices.map((inv) => ({ tipo: "facturador" as const, raw: inv })),
   ].sort((a, b) => {
@@ -572,7 +568,7 @@ export default function Invoices() {
         </div>
         <div className="bg-white rounded-lg shadow-sm p-4">
           <div className="text-sm text-gray-600">A clientes</div>
-          <div className="text-2xl font-bold text-sky-600">{billingSoloCliente.length}</div>
+          <div className="text-2xl font-bold text-sky-600">{billingInvoices.length}</div>
         </div>
         <div className="bg-white rounded-lg shadow-sm p-4">
           <div className="text-sm text-gray-600">A proveedores</div>

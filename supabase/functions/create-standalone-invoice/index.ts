@@ -1004,15 +1004,15 @@ async function generarCreditoFiscal(
     nit: nitReceptor, // Para tipo 03, usar nit directamente
     nrc: nrcFormateado,
     nombre: options.fiscalData.nombre_completo,
-    codActividad: RECEPTOR_COD_ACTIVIDAD_DEFAULT,
-    descActividad: RECEPTOR_DESC_ACTIVIDAD_DEFAULT,
+    codActividad: (options.fiscalData as any).cod_actividad || RECEPTOR_COD_ACTIVIDAD_DEFAULT,
+    descActividad: (options.fiscalData as any).desc_actividad || RECEPTOR_DESC_ACTIVIDAD_DEFAULT,
     nombreComercial: nombreComercialReceptor, // Requerido para tipo 03
     direccion: {
       departamento: deptoFormateado,
       municipio: muniFormateado,
       complemento: options.fiscalData.direccion || RECEPTOR_DIRECCION_DEFAULT,
     },
-    telefono: RECEPTOR_TELEFONO_DEFAULT || null,
+    telefono: (options.fiscalData as any).telefono || RECEPTOR_TELEFONO_DEFAULT || null,
     correo: options.fiscalData.email,
   };
 

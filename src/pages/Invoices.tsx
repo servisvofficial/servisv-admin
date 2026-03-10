@@ -396,7 +396,7 @@ export default function Invoices() {
         const receptorFiscalData = isFacturador ? (raw as FacturadorInvoice).fiscal_data : (isClient ? (raw as BillingInvoice).fiscal_data : (raw as ProviderInvoice).receptor_fiscal_data);
         const dteJson = raw.dte_json;
         const observaciones = isFacturador ? null : (isClient ? null : (raw as ProviderInvoice).dte_observaciones);
-        const dteTipoLabel = isFacturador ? (raw as FacturadorInvoice).tipo_dte : raw.dte_tipo_documento;
+        const dteTipoLabel = isFacturador ? (raw as FacturadorInvoice).tipo_dte : (isClient ? (raw as BillingInvoice).dte_tipo_documento : (raw as ProviderInvoice).dte_tipo_documento);
         const ambiente = (dteJson as any)?.identificacion?.ambiente ?? "00";
         const fechaParaUrl = isFacturador ? ((raw as FacturadorInvoice).dte_fecha_emision || (raw as FacturadorInvoice).invoice_date) : (isClient ? format(new Date((raw as BillingInvoice).invoice_date), "yyyy-MM-dd") : (raw as ProviderInvoice).dte_fecha_emision);
         const showConsultaPublica = estado === "procesado" && codigoGeneracion && fechaParaUrl;

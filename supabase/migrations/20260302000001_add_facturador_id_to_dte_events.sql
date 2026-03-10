@@ -1,0 +1,2 @@
+ALTER TABLE dte_events ADD COLUMN IF NOT EXISTS facturador_invoice_id UUID REFERENCES facturador_invoices(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_dte_events_facturador_id ON dte_events(facturador_invoice_id);

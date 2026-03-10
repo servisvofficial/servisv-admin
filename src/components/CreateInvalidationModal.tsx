@@ -14,8 +14,8 @@ interface Invoice {
 
 interface Props {
   invoice: Invoice;
-  /** "billing" = factura a cliente; "provider" = factura a proveedor */
-  invoiceType?: "billing" | "provider";
+  /** "billing" = factura a cliente; "provider" = factura a proveedor; "facturador" = factura standalone */
+  invoiceType?: "billing" | "provider" | "facturador";
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -91,6 +91,8 @@ export function CreateInvalidationModal({ invoice, invoiceType = "billing", onCl
             type: "invalidacion",
             ...(invoiceType === "provider"
               ? { provider_invoice_id: invoice.id }
+              : invoiceType === "facturador"
+              ? { facturador_invoice_id: invoice.id }
               : { billing_id: invoice.id }),
             motivo: motivoCustom || motivo,
             tipo_anulacion: tipoAnulacion,

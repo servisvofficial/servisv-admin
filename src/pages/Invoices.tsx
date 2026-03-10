@@ -6,6 +6,7 @@ import { CreateCreditNoteModal } from "../components/CreateCreditNoteModal";
 import { CreateDebitNoteModal } from "../components/CreateDebitNoteModal";
 import { CreateInvalidationModal } from "../components/CreateInvalidationModal";
 import { useProviderInvoices, type ProviderInvoice } from "../hooks/useProviderInvoices";
+import { useFacturadorInvoices, type FacturadorInvoice } from "../hooks/useFacturadorInvoices";
 
 interface BillingInvoice {
   id: string;
@@ -14,6 +15,9 @@ interface BillingInvoice {
   invoice_type: string;
   total_amount: number;
   total_commissions?: number;
+  platform_commission_buyer?: number;
+  payment_gateway_commission?: number;
+  iva_amount?: number;
   dte_tipo_documento: string;
   dte_codigo_generacion: string | null;
   dte_numero_control: string | null;
@@ -26,7 +30,8 @@ interface BillingInvoice {
 
 type UnifiedRow =
   | { tipo: "cliente"; raw: BillingInvoice }
-  | { tipo: "proveedor"; raw: ProviderInvoice };
+  | { tipo: "proveedor"; raw: ProviderInvoice }
+  | { tipo: "facturador"; raw: FacturadorInvoice };
 
 function buildQrUrl(codigo: string, fechaEmi: string, ambiente: string): string {
   return `https://admin.factura.gob.sv/consultaPublica?ambiente=${ambiente}&codGen=${codigo}&fechaEmi=${fechaEmi}`;
@@ -57,6 +62,7 @@ function getTipoDteLabel(tipo: string): string {
 
 export default function Invoices() {
   const { invoices: providerInvoices, loading: loadingProvider, error: errorProvider, fetchInvoices: fetchProviderInvoices } = useProviderInvoices();
+  const { invoices: facturadorInvoices, loading: loadingFacturador, error: errorFacturador, fetchInvoices: fetchFacturadorInvoices } = useFacturadorInvoices();
   const [billingInvoices, setBillingInvoices] = useState<BillingInvoice[]>([]);
   const [loadingBilling, setLoadingBilling] = useState(true);
   const [billingError, setBillingError] = useState<string | null>(null);
@@ -91,21 +97,27 @@ export default function Invoices() {
     fetchBillingInvoices();
   }, []);
 
-  const loading = loadingBilling || loadingProvider;
-  const error = billingError || errorProvider;
+  const loading = loadingBilling || loadingProvider || loadingFacturador;
+  const error = billingError || errorProvider || errorFacturador;
+
+  // Facturas a cliente: solo billings que NO tienen provider_invoice (evita duplicar facturas a proveedor)
+  const billingIdsConProvider = new Set(providerInvoices.map((p) => p.billing_id));
+  const billingSoloCliente = billingInvoices.filter((b) => !billingIdsConProvider.has(b.id));
 
   const unifiedRows: UnifiedRow[] = [
-    ...billingInvoices.map((inv) => ({ tipo: "cliente" as const, raw: inv })),
+    ...billingSoloCliente.map((inv) => ({ tipo: "cliente" as const, raw: inv })),
     ...providerInvoices.map((inv) => ({ tipo: "proveedor" as const, raw: inv })),
+    ...facturadorInvoices.map((inv) => ({ tipo: "facturador" as const, raw: inv })),
   ].sort((a, b) => {
-    const dateA = a.tipo === "cliente" ? a.raw.created_at : a.raw.created_at;
-    const dateB = b.tipo === "cliente" ? b.raw.created_at : b.raw.created_at;
+    const dateA = a.raw.created_at;
+    const dateB = b.raw.created_at;
     return new Date(dateB).getTime() - new Date(dateA).getTime();
   });
 
   const refreshAll = () => {
     fetchBillingInvoices();
     fetchProviderInvoices();
+    fetchFacturadorInvoices();
   };
 
   const handleCreateCreditNote = (invoice: BillingInvoice) => {
@@ -124,82 +136,68 @@ export default function Invoices() {
   };
 
   const handleEmitContingency = async (row: UnifiedRow) => {
-    if (row.tipo === "cliente") {
-      setContingencyLoadingId(row.raw.id);
-      try {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-        const response = await fetch(`${supabaseUrl}/functions/v1/create-invoice`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceRoleKey}` },
-          body: JSON.stringify({ emitirEnContingencia: true, billingId: row.raw.id }),
-        });
-        const result = await response.json();
-        if (!response.ok || result?.success === false) throw new Error(result?.error || result?.message || "Error al emitir DTE en contingencia");
-        refreshAll();
-      } catch (err: any) {
-        setBillingError(err.message || "Error al emitir DTE en contingencia");
-      } finally {
-        setContingencyLoadingId(null);
+    setContingencyLoadingId(row.raw.id);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+      
+      let endpoint = "create-invoice";
+      let body: any = { emitirEnContingencia: true };
+      
+      if (row.tipo === "cliente") {
+        body.billingId = row.raw.id;
+      } else if (row.tipo === "proveedor") {
+        body.providerInvoiceId = row.raw.id;
+      } else if (row.tipo === "facturador") {
+        endpoint = "create-standalone-invoice";
+        body.facturadorInvoiceId = row.raw.id;
       }
-    } else {
-      setContingencyLoadingId(row.raw.id);
-      try {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-        const response = await fetch(`${supabaseUrl}/functions/v1/create-invoice`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceRoleKey}` },
-          body: JSON.stringify({ emitirEnContingencia: true, providerInvoiceId: row.raw.id }),
-        });
-        const result = await response.json();
-        if (!response.ok || result?.success === false) throw new Error(result?.error || result?.message || "Error al emitir contingencia (proveedor)");
-        refreshAll();
-      } catch (err: any) {
-        setBillingError(err.message || "Error al emitir contingencia (proveedor)");
-      } finally {
-        setContingencyLoadingId(null);
-      }
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceRoleKey}` },
+        body: JSON.stringify(body),
+      });
+      const result = await response.json();
+      if (!response.ok || result?.success === false) throw new Error(result?.error || result?.message || "Error al emitir DTE en contingencia");
+      refreshAll();
+    } catch (err: any) {
+      setBillingError(err.message || "Error al emitir DTE en contingencia");
+    } finally {
+      setContingencyLoadingId(null);
     }
   };
 
   const handleDuplicateForContingency = async (row: UnifiedRow) => {
-    if (row.tipo === "cliente") {
-      setDuplicateLoadingId(row.raw.id);
-      try {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-        const response = await fetch(`${supabaseUrl}/functions/v1/create-invoice`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceRoleKey}` },
-          body: JSON.stringify({ duplicarParaContingencia: true, billingId: row.raw.id }),
-        });
-        const result = await response.json();
-        if (!response.ok || result?.success === false) throw new Error(result?.error || "Error al duplicar factura para contingencia");
-        refreshAll();
-      } catch (err: any) {
-        setBillingError(err.message || "Error al duplicar factura para contingencia");
-      } finally {
-        setDuplicateLoadingId(null);
+    setDuplicateLoadingId(row.raw.id);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+      
+      let endpoint = "create-invoice";
+      let body: any = { duplicarParaContingencia: true };
+      
+      if (row.tipo === "cliente") {
+        body.billingId = row.raw.id;
+      } else if (row.tipo === "proveedor") {
+        body.providerInvoiceId = row.raw.id;
+      } else if (row.tipo === "facturador") {
+        endpoint = "create-standalone-invoice";
+        body.facturadorInvoiceId = row.raw.id;
       }
-    } else {
-      setDuplicateLoadingId(row.raw.id);
-      try {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-        const response = await fetch(`${supabaseUrl}/functions/v1/create-invoice`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceRoleKey}` },
-          body: JSON.stringify({ duplicarParaContingencia: true, providerInvoiceId: row.raw.id }),
-        });
-        const result = await response.json();
-        if (!response.ok || result?.success === false) throw new Error(result?.error || "Error al duplicar contingencia (proveedor)");
-        refreshAll();
-      } catch (err: any) {
-        setBillingError(err.message || "Error al duplicar contingencia (proveedor)");
-      } finally {
-        setDuplicateLoadingId(null);
-      }
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceRoleKey}` },
+        body: JSON.stringify(body),
+      });
+      const result = await response.json();
+      if (!response.ok || result?.success === false) throw new Error(result?.error || "Error al duplicar factura para contingencia");
+      refreshAll();
+    } catch (err: any) {
+      setBillingError(err.message || "Error al duplicar factura para contingencia");
+    } finally {
+      setDuplicateLoadingId(null);
     }
   };
 
@@ -246,6 +244,7 @@ export default function Invoices() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo DTE</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente / Receptor</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monto Total</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Comisión / DTE</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código Generación</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
@@ -254,18 +253,28 @@ export default function Invoices() {
             <tbody className="bg-white divide-y divide-gray-200">
               {unifiedRows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
                     No hay facturas registradas
                   </td>
                 </tr>
               ) : (
                 unifiedRows.map((row) => {
                   const isClient = row.tipo === "cliente";
+                  const isFacturador = row.tipo === "facturador";
                   const inv = row.raw;
-                  const dteTipo = isClient ? (inv as BillingInvoice).dte_tipo_documento : (inv as ProviderInvoice).dte_tipo_documento;
-                  const clienteReceptor = isClient ? (inv as BillingInvoice).fiscal_data?.nombre_completo || "N/A" : (inv as ProviderInvoice).receptor_fiscal_data?.nombre_completo || "—";
-                  const total = isClient ? (inv as BillingInvoice).total_amount : Number((inv as ProviderInvoice).total_compra);
-                  const fecha = isClient ? (inv as BillingInvoice).invoice_date : (inv as ProviderInvoice).created_at;
+                  const dteTipo = isFacturador ? (inv as FacturadorInvoice).tipo_dte : (isClient ? (inv as BillingInvoice).dte_tipo_documento : (inv as ProviderInvoice).dte_tipo_documento);
+                  const clienteReceptor = isFacturador ? (inv as FacturadorInvoice).fiscal_data?.nombre_completo || "—" : (isClient ? (inv as BillingInvoice).fiscal_data?.nombre_completo || "N/A" : (inv as ProviderInvoice).receptor_fiscal_data?.nombre_completo || "—");
+                  const total = isFacturador
+                    ? Number((inv as FacturadorInvoice).total_amount)
+                    : isClient
+                    ? (inv as BillingInvoice).total_amount
+                    : Number((inv as ProviderInvoice).billing?.total_amount ?? (inv as ProviderInvoice).total_compra);
+                  const montoFacturadoDte = isFacturador
+                    ? Number((inv as FacturadorInvoice).total_amount)
+                    : isClient
+                    ? ((inv as BillingInvoice).total_commissions ?? 0)
+                    : Number((inv as ProviderInvoice).total_compra);
+                  const fecha = isFacturador ? (inv as FacturadorInvoice).created_at : (isClient ? (inv as BillingInvoice).invoice_date : (inv as ProviderInvoice).created_at);
                   const codigo = inv.dte_codigo_generacion;
                   const sello = inv.dte_sello_recepcion;
                   const canInvalidate = codigo && sello;
@@ -276,11 +285,11 @@ export default function Invoices() {
                   return (
                     <tr key={isClient ? inv.id : `prov-${inv.id}`} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 max-w-[180px] truncate">
-                        {isClient ? (inv as BillingInvoice).invoice_number : (inv as ProviderInvoice).dte_numero_control || (inv as ProviderInvoice).id.slice(0, 12)}
+                        {isFacturador ? (inv as FacturadorInvoice).invoice_number : (isClient ? (inv as BillingInvoice).invoice_number : (inv as ProviderInvoice).dte_numero_control || (inv as ProviderInvoice).id.slice(0, 12))}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${isClient ? "bg-sky-100 text-sky-800" : "bg-violet-100 text-violet-800"}`}>
-                          {isClient ? "Cliente" : "Proveedor"}
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${isFacturador ? "bg-amber-100 text-amber-800" : isClient ? "bg-sky-100 text-sky-800" : "bg-violet-100 text-violet-800"}`}>
+                          {isFacturador ? "Facturador" : isClient ? "Cliente" : "Proveedor"}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -289,7 +298,18 @@ export default function Invoices() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">{clienteReceptor}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${total.toFixed(2)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        ${total.toFixed(2)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <span className="font-semibold text-indigo-700">${montoFacturadoDte.toFixed(2)}</span>
+                        {isClient && (
+                          <p className="text-xs text-gray-400 mt-0.5">comisión cobrada</p>
+                        )}
+                        {!isClient && !isFacturador && (
+                          <p className="text-xs text-gray-400 mt-0.5">monto DTE proveedor</p>
+                        )}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {format(new Date(fecha), isClient ? "dd/MM/yyyy" : "dd/MM/yyyy HH:mm", { locale: es })}
                       </td>
@@ -298,7 +318,7 @@ export default function Invoices() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <div className="flex flex-wrap gap-2">
-                          {isClient && dteTipo === "03" && (
+                          {isClient && !isFacturador && dteTipo === "03" && (
                             <>
                               <button
                                 onClick={() => handleCreateCreditNote(inv as BillingInvoice)}
@@ -362,21 +382,23 @@ export default function Invoices() {
       {/* Modal Ver detalles - Unificado (cliente y proveedor, misma estructura) */}
       {selectedDetailRow && (() => {
         const isClient = selectedDetailRow.tipo === "cliente";
+        const isFacturador = selectedDetailRow.tipo === "facturador";
         const raw = selectedDetailRow.raw;
         const codigoGeneracion = raw.dte_codigo_generacion;
-        const numeroControl = isClient ? (raw as BillingInvoice).dte_numero_control : (raw as ProviderInvoice).dte_numero_control;
-        const receptorNombre = isClient ? (raw as BillingInvoice).fiscal_data?.nombre_completo : (raw as ProviderInvoice).receptor_fiscal_data?.nombre_completo;
-        const receptorEmail = isClient ? (raw as BillingInvoice).fiscal_data?.email : (raw as ProviderInvoice).receptor_fiscal_data?.email;
-        const total = isClient ? (raw as BillingInvoice).total_amount : Number((raw as ProviderInvoice).total_compra);
-        const descripcion = isClient ? null : (raw as ProviderInvoice).descripcion;
+        const numeroControl = isFacturador ? (raw as FacturadorInvoice).dte_numero_control : (isClient ? (raw as BillingInvoice).dte_numero_control : (raw as ProviderInvoice).dte_numero_control);
+        const receptorNombre = isFacturador ? (raw as FacturadorInvoice).fiscal_data?.nombre_completo : (isClient ? (raw as BillingInvoice).fiscal_data?.nombre_completo : (raw as ProviderInvoice).receptor_fiscal_data?.nombre_completo);
+        const receptorEmail = isFacturador ? (raw as FacturadorInvoice).fiscal_data?.email : (isClient ? (raw as BillingInvoice).fiscal_data?.email : (raw as ProviderInvoice).receptor_fiscal_data?.email);
+        const total = isFacturador ? Number((raw as FacturadorInvoice).total_amount) : (isClient ? (raw as BillingInvoice).total_amount : Number((raw as ProviderInvoice).total_compra));
+        const descripcion = isFacturador ? (raw as FacturadorInvoice).concept : (isClient ? null : (raw as ProviderInvoice).descripcion);
         const estado = raw.dte_estado ?? null;
-        const fechaEmision = isClient ? (raw as BillingInvoice).invoice_date : (raw as ProviderInvoice).dte_fecha_emision;
-        const horaEmision = isClient ? null : (raw as ProviderInvoice).dte_hora_emision;
-        const receptorFiscalData = isClient ? (raw as BillingInvoice).fiscal_data : (raw as ProviderInvoice).receptor_fiscal_data;
+        const fechaEmision = isFacturador ? ((raw as FacturadorInvoice).dte_fecha_emision || (raw as FacturadorInvoice).invoice_date) : (isClient ? (raw as BillingInvoice).invoice_date : (raw as ProviderInvoice).dte_fecha_emision);
+        const horaEmision = isFacturador ? (raw as FacturadorInvoice).dte_hora_emision : (isClient ? null : (raw as ProviderInvoice).dte_hora_emision);
+        const receptorFiscalData = isFacturador ? (raw as FacturadorInvoice).fiscal_data : (isClient ? (raw as BillingInvoice).fiscal_data : (raw as ProviderInvoice).receptor_fiscal_data);
         const dteJson = raw.dte_json;
-        const observaciones = isClient ? null : (raw as ProviderInvoice).dte_observaciones;
+        const observaciones = isFacturador ? null : (isClient ? null : (raw as ProviderInvoice).dte_observaciones);
+        const dteTipoLabel = isFacturador ? (raw as FacturadorInvoice).tipo_dte : raw.dte_tipo_documento;
         const ambiente = (dteJson as any)?.identificacion?.ambiente ?? "00";
-        const fechaParaUrl = isClient ? format(new Date((raw as BillingInvoice).invoice_date), "yyyy-MM-dd") : (raw as ProviderInvoice).dte_fecha_emision;
+        const fechaParaUrl = isFacturador ? ((raw as FacturadorInvoice).dte_fecha_emision || (raw as FacturadorInvoice).invoice_date) : (isClient ? format(new Date((raw as BillingInvoice).invoice_date), "yyyy-MM-dd") : (raw as ProviderInvoice).dte_fecha_emision);
         const showConsultaPublica = estado === "procesado" && codigoGeneracion && fechaParaUrl;
 
         return (
@@ -388,10 +410,10 @@ export default function Invoices() {
                   <div className="bg-gradient-to-r from-gray-800 to-gray-900 px-6 py-5 flex justify-between items-center flex-shrink-0">
                     <div>
                       <h2 className="text-2xl font-bold text-white">
-                        Detalle factura {isClient ? "a cliente" : "al proveedor"}
+                        Detalle factura {isFacturador ? "(Facturador)" : isClient ? "a cliente" : "al proveedor"}
                       </h2>
                       <p className="text-gray-200 text-sm mt-1">
-                        {getTipoDteLabel(raw.dte_tipo_documento)} · {estado ?? "—"}
+                        {getTipoDteLabel(dteTipoLabel)} · {estado ?? "—"}
                       </p>
                     </div>
                     <button type="button" onClick={() => setSelectedDetailRow(null)} className="text-white/80 hover:text-white hover:bg-white/10 rounded-lg p-2">
@@ -414,7 +436,7 @@ export default function Invoices() {
                         <div className="font-mono text-sm text-gray-900 break-all">{numeroControl || "—"}</div>
                       </div>
                       <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                        <div className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Receptor {isClient ? "(cliente)" : "(proveedor)"}</div>
+                        <div className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Receptor {isFacturador ? "" : isClient ? "(cliente)" : "(proveedor)"}</div>
                         <div className="text-sm text-gray-900">
                           {receptorNombre || "—"}
                           {receptorEmail && <div className="text-gray-500 text-xs mt-1">{receptorEmail}</div>}
@@ -507,6 +529,21 @@ export default function Invoices() {
           invoice={
             selectedRowForInvalidation.tipo === "cliente"
               ? (selectedRowForInvalidation.raw as BillingInvoice)
+              : selectedRowForInvalidation.tipo === "facturador"
+              ? (() => {
+                  const f = selectedRowForInvalidation.raw as FacturadorInvoice;
+                  return {
+                    id: f.id,
+                    invoice_number: f.invoice_number,
+                    invoice_date: f.dte_fecha_emision || f.invoice_date,
+                    total_amount: Number(f.total_amount),
+                    fiscal_data: f.fiscal_data,
+                    dte_codigo_generacion: f.dte_codigo_generacion,
+                    dte_numero_control: f.dte_numero_control,
+                    dte_sello_recepcion: f.dte_sello_recepcion,
+                    dte_tipo_documento: f.tipo_dte,
+                  };
+                })()
               : (() => {
                   const p = selectedRowForInvalidation.raw as ProviderInvoice;
                   return {
@@ -522,24 +559,28 @@ export default function Invoices() {
                   };
                 })()
           }
-          invoiceType={selectedRowForInvalidation.tipo === "proveedor" ? "provider" : "billing"}
+          invoiceType={selectedRowForInvalidation.tipo === "proveedor" ? "provider" : selectedRowForInvalidation.tipo === "facturador" ? "facturador" : "billing"}
           onClose={() => { setShowInvalidationModal(false); setSelectedRowForInvalidation(null); }}
           onSuccess={() => { setShowInvalidationModal(false); setSelectedRowForInvalidation(null); refreshAll(); }}
         />
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
         <div className="bg-white rounded-lg shadow-sm p-4">
           <div className="text-sm text-gray-600">Total Facturas</div>
           <div className="text-2xl font-bold text-gray-900">{unifiedRows.length}</div>
         </div>
         <div className="bg-white rounded-lg shadow-sm p-4">
           <div className="text-sm text-gray-600">A clientes</div>
-          <div className="text-2xl font-bold text-sky-600">{billingInvoices.length}</div>
+          <div className="text-2xl font-bold text-sky-600">{billingSoloCliente.length}</div>
         </div>
         <div className="bg-white rounded-lg shadow-sm p-4">
           <div className="text-sm text-gray-600">A proveedores</div>
           <div className="text-2xl font-bold text-violet-600">{providerInvoices.length}</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm p-4">
+          <div className="text-sm text-gray-600">Facturador</div>
+          <div className="text-2xl font-bold text-amber-600">{facturadorInvoices.length}</div>
         </div>
       </div>
     </div>

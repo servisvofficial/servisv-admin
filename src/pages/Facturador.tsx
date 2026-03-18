@@ -81,7 +81,6 @@ export default function Facturador() {
   const [numDocIdentidad, setNumDocIdentidad] = useState("");
   const [nombreCompleto, setNombreCompleto] = useState("");
   const [email, setEmail] = useState("");
-  const [dui, setDui] = useState("");
   const [nit, setNit] = useState("");
   const [nrc, setNrc] = useState("");
   const [codActividad, setCodActividad] = useState("");

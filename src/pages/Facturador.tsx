@@ -77,6 +77,8 @@ export default function Facturador() {
 
   const [usarDatosReceptor, setUsarDatosReceptor] = useState(false);
   const [tipoPersona, setTipoPersona] = useState<"natural" | "juridica">("natural");
+  const [tipoDocIdentidad, setTipoDocIdentidad] = useState<"13" | "02" | "03" | "37">("13");
+  const [numDocIdentidad, setNumDocIdentidad] = useState("");
   const [nombreCompleto, setNombreCompleto] = useState("");
   const [email, setEmail] = useState("");
   const [dui, setDui] = useState("");
@@ -151,8 +153,12 @@ export default function Facturador() {
         setError("Email del receptor es requerido");
         return;
       }
-      if (!dui.trim() && !nit.trim()) {
-        setError("Indica DUI o NIT del receptor");
+      if (tipoPersona === "natural" && !numDocIdentidad.trim() && !nit.trim()) {
+        setError("Indica el número de documento del receptor");
+        return;
+      }
+      if (tipoPersona === "juridica" && !nit.trim()) {
+        setError("Indica el NIT del receptor");
         return;
       }
       if (tipoDte === "03" && !nrc.trim()) {
@@ -181,7 +187,11 @@ export default function Facturador() {
           tipo_persona: tipoPersona,
           nombre_completo: nombreCompleto.trim(),
           email: email.trim(),
-          dui: dui.trim() || undefined,
+          // Para persona natural: usar tipo_documento + num_documento
+          tipo_documento: tipoPersona === "natural" ? tipoDocIdentidad : undefined,
+          num_documento: tipoPersona === "natural" ? numDocIdentidad.trim() || undefined : undefined,
+          // Mantener dui para retrocompat cuando el tipo es DUI (13)
+          dui: tipoPersona === "natural" && tipoDocIdentidad === "13" ? numDocIdentidad.trim() || undefined : undefined,
           nit: nit.trim() || undefined,
           numero_registro_contribuyente: tipoDte === "03" ? nrc.trim() : undefined,
           cod_actividad: codActividad.trim() || undefined,
@@ -432,25 +442,55 @@ export default function Facturador() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-violet-500"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">DUI</label>
-                    <input
-                      type="text"
-                      value={dui}
-                      onChange={(e) => setDui(e.target.value)}
-                      placeholder="00000000-0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-violet-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">NIT</label>
-                    <input
-                      type="text"
-                      value={nit}
-                      onChange={(e) => setNit(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-violet-500"
-                    />
-                  </div>
+                  {tipoPersona === "natural" && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de documento de identidad</label>
+                        <select
+                          value={tipoDocIdentidad}
+                          onChange={(e) => {
+                            setTipoDocIdentidad(e.target.value as "13" | "02" | "03" | "37");
+                            setNumDocIdentidad("");
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-violet-500"
+                        >
+                          <option value="13">DUI (Documento Único de Identidad)</option>
+                          <option value="02">Carnet de Residente</option>
+                          <option value="03">Pasaporte</option>
+                          <option value="37">Otro documento</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          {tipoDocIdentidad === "13" ? "Número DUI *" :
+                           tipoDocIdentidad === "02" ? "Número Carnet Residente *" :
+                           tipoDocIdentidad === "03" ? "Número Pasaporte *" : "Número de Documento *"}
+                        </label>
+                        <input
+                          type="text"
+                          value={numDocIdentidad}
+                          onChange={(e) => setNumDocIdentidad(e.target.value)}
+                          placeholder={
+                            tipoDocIdentidad === "13" ? "00000000-0" :
+                            tipoDocIdentidad === "02" ? "Ej: 55741" :
+                            tipoDocIdentidad === "03" ? "Ej: A1234567" : "Número de documento"
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-violet-500"
+                        />
+                      </div>
+                    </>
+                  )}
+                  {(tipoPersona === "juridica" || tipoDte === "03") && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">NIT{tipoDte === "03" ? " *" : ""}</label>
+                      <input
+                        type="text"
+                        value={nit}
+                        onChange={(e) => setNit(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      />
+                    </div>
+                  )}
                   {tipoDte === "03" && (
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">NRC *</label>

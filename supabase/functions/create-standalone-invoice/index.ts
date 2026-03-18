@@ -24,6 +24,11 @@ interface FiscalData {
   departamento?: string; // Departamento (01-14)
   municipio?: string; // Municipio/Alcaldía según CAT-013 2024 (01-44)
   distrito?: string; // Distrito según CAT-013 2024 (01-XX)
+  tipo_documento?: string; // CAT-022: "13"=DUI, "02"=Carnet Residente, "03"=Pasaporte, "37"=Otro
+  num_documento?: string; // Número del documento de identidad
+  cod_actividad?: string; // Para CCF: código de actividad económica del receptor
+  desc_actividad?: string; // Para CCF: descripción de actividad económica del receptor
+  telefono?: string; // Teléfono del receptor
 }
 
 interface DTEIdentificacion {
@@ -1004,15 +1009,15 @@ async function generarCreditoFiscal(
     nit: nitReceptor, // Para tipo 03, usar nit directamente
     nrc: nrcFormateado,
     nombre: options.fiscalData.nombre_completo,
-    codActividad: (options.fiscalData as any).cod_actividad || RECEPTOR_COD_ACTIVIDAD_DEFAULT,
-    descActividad: (options.fiscalData as any).desc_actividad || RECEPTOR_DESC_ACTIVIDAD_DEFAULT,
+    codActividad: options.fiscalData.cod_actividad || RECEPTOR_COD_ACTIVIDAD_DEFAULT,
+    descActividad: options.fiscalData.desc_actividad || RECEPTOR_DESC_ACTIVIDAD_DEFAULT,
     nombreComercial: nombreComercialReceptor, // Requerido para tipo 03
     direccion: {
       departamento: deptoFormateado,
       municipio: muniFormateado,
       complemento: options.fiscalData.direccion || RECEPTOR_DIRECCION_DEFAULT,
     },
-    telefono: (options.fiscalData as any).telefono || RECEPTOR_TELEFONO_DEFAULT || null,
+    telefono: options.fiscalData.telefono || RECEPTOR_TELEFONO_DEFAULT || null,
     correo: options.fiscalData.email,
   };
 
@@ -1318,30 +1323,41 @@ async function generarFacturaConsumidorFinal(
 
   // Determinar tipoDocumento y numDocumento según el esquema fe-fc-v1.json
   // Para tipo 01 (Factura Consumidor Final):
-  // - Si tiene NIT (tipoDocumento="36"), numDocumento debe cumplir: ^([0-9]{14}|[0-9]{9})$
-  // - Si tiene DUI (tipoDocumento="13"), numDocumento debe cumplir: ^[0-9]{8}-[0-9]{1}$ (con guión)
-  // - Si tipoDocumento NO es "36", entonces nrc debe ser null
+  // - "36" (NIT): ^([0-9]{14}|[0-9]{9})$
+  // - "13" (DUI): ^[0-9]{8}-[0-9]{1}$ (con guión)
+  // - "02" (Carnet Residente), "03" (Pasaporte), "37" (Otro): texto libre
   const tieneNIT = !!options.fiscalData?.nit;
-  const tipoDocumento = tieneNIT ? TIPO_DOCUMENTO_NIT : TIPO_DOCUMENTO_DUI;
+  // Leer tipo_documento explícito si viene del Facturador (admin)
+  const tipoDocExplicito = options.fiscalData.tipo_documento;
+  const numDocExplicito = options.fiscalData.num_documento;
 
+  let tipoDocumento: string;
   let numDocumento: string;
+
   if (tieneNIT) {
-    // Para NIT: sin guiones, debe tener 9 o 14 dígitos
+    // NIT tiene prioridad
+    tipoDocumento = TIPO_DOCUMENTO_NIT;
     numDocumento = (options.fiscalData.nit || "").replace(/-/g, "");
     if (numDocumento.length !== 9 && numDocumento.length !== 14) {
       throw new Error(
         `NIT del receptor inválido para tipo 01: debe tener 9 o 14 dígitos, recibido: ${numDocumento}`
       );
     }
+  } else if (tipoDocExplicito && tipoDocExplicito !== "13" && numDocExplicito) {
+    // Carnet Residente (02), Pasaporte (03) u Otro (37): usar como texto libre
+    tipoDocumento = tipoDocExplicito;
+    numDocumento = numDocExplicito.trim();
+    if (!numDocumento) {
+      throw new Error(`Número de documento vacío para tipo ${tipoDocExplicito}`);
+    }
   } else {
-    // Para DUI: formato con guión ^[0-9]{8}-[0-9]{1}$
-    const duiRaw =
-      options.fiscalData?.dui?.replace(/-/g, "") || RECEPTOR_NUM_DOC_DEFAULT;
+    // DUI (13): formato con guión ^[0-9]{8}-[0-9]{1}$
+    tipoDocumento = TIPO_DOCUMENTO_DUI;
+    const duiSource = numDocExplicito || options.fiscalData?.dui || RECEPTOR_NUM_DOC_DEFAULT;
+    const duiRaw = duiSource.replace(/-/g, "");
     if (duiRaw.length === 9) {
-      // Formato: 12345678-9
       numDocumento = `${duiRaw.substring(0, 8)}-${duiRaw.substring(8, 9)}`;
     } else if (duiRaw.length === 8) {
-      // Si solo tiene 8 dígitos, agregar un 0 al final
       numDocumento = `${duiRaw}-0`;
     } else {
       throw new Error(
@@ -1836,6 +1852,13 @@ serve(async (req) => {
       direccion: String(fiscalData.direccion || "San Salvador").trim(),
       departamento: String(fiscalData.departamento || "06").padStart(2, "0").substring(0, 2),
       municipio: String(fiscalData.municipio || "01").padStart(2, "0").substring(0, 2),
+      // Campos para tipo de documento distinto al DUI
+      tipo_documento: fiscalData.tipo_documento?.trim() || undefined,
+      num_documento: fiscalData.num_documento?.trim() || undefined,
+      // Campos para CCF
+      cod_actividad: fiscalData.cod_actividad?.trim() || undefined,
+      desc_actividad: fiscalData.desc_actividad?.trim() || undefined,
+      telefono: fiscalData.telefono?.trim() || undefined,
     };
 
     const baseImponible = redondear(amount / 1.13);
@@ -1974,11 +1997,23 @@ serve(async (req) => {
 
     const receptor = dteJson?.receptor || {};
     const receptorNombre = receptor.nombre || fiscalDataProvider.nombre_completo;
-    const receptorNumDocumento = receptor.numDocumento || fiscalDataProvider.dui || fiscalDataProvider.nit || "";
-    const receptorTipoDocumento = receptor.tipoDocumento || "";
-    const receptorDui = receptorTipoDocumento === "13" ? receptorNumDocumento : "";
+    const receptorNumDocumento = receptor.numDocumento || (fiscalDataProvider as any).num_documento || fiscalDataProvider.dui || fiscalDataProvider.nit || "";
+    const receptorTipoDocumento = receptor.tipoDocumento || (fiscalDataProvider as any).tipo_documento || "";
     const receptorNit = receptorTipoDocumento === "36" ? receptorNumDocumento : "";
     const receptorNrc = receptor.nrc || "";
+    // Etiqueta dinámica según tipo de documento
+    const getDocLabel = (tipo: string) => {
+      switch (tipo) {
+        case "13": return "DUI";
+        case "02": return "Carnet de Residente";
+        case "03": return "Pasaporte";
+        case "36": return "NIT";
+        case "37": return "Otro Documento";
+        default: return "Documento";
+      }
+    };
+    // Mostrar documento de identidad para todos los tipos excepto NIT (que se muestra aparte)
+    const receptorDocIdentidad = receptorTipoDocumento !== "36" ? receptorNumDocumento : "";
     const receptorCorreo = receptor.correo || fiscalDataProvider.email;
     const receptorDireccion = receptor.direccion?.complemento || fiscalDataProvider.direccion || "";
 
@@ -2095,10 +2130,10 @@ serve(async (req) => {
       <div class="section-content">
         <table>
           <tr><td style="width: 30%; font-weight: bold;">Nombre o razón social:</td><td>${receptorNombre}</td></tr>
-          ${receptorDui ? `<tr><td style="font-weight: bold;">DUI:</td><td>${receptorDui}</td></tr>` : ""}
+          ${receptorDocIdentidad ? `<tr><td style="font-weight: bold;">${getDocLabel(receptorTipoDocumento)}:</td><td>${receptorDocIdentidad}</td></tr>` : ""}
           ${receptorNit ? `<tr><td style="font-weight: bold;">NIT:</td><td>${receptorNit}</td></tr>` : ""}
           ${receptorNrc ? `<tr><td style="font-weight: bold;">NRC:</td><td>${receptorNrc}</td></tr>` : ""}
-          ${receptor.nit ? `<tr><td style="font-weight: bold;">NIT:</td><td>${formatNIT(receptor.nit)}</td></tr>` : ""}
+          ${receptor.nit && !receptorNit ? `<tr><td style="font-weight: bold;">NIT:</td><td>${formatNIT(receptor.nit)}</td></tr>` : ""}
           ${receptorDireccion ? `<tr><td style="font-weight: bold;">Dirección:</td><td>${receptorDireccion}</td></tr>` : ""}
           <tr><td style="font-weight: bold;">Correo electrónico:</td><td>${receptorCorreo}</td></tr>
         </table>

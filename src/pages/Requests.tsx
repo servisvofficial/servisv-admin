@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { CreateProviderInvoiceModal } from "../components/CreateProviderInvoiceModal";
+import { RequestTimelineModal } from "../components/RequestTimelineModal";
 
 type RequestRecord = {
   id: string;
@@ -89,6 +90,7 @@ function Requests() {
     setSelectedBillingForProviderInvoice,
   ] = useState<any | null>(null);
   const [refreshInProgressKey, setRefreshInProgressKey] = useState(0);
+  const [selectedTimelineRequest, setSelectedTimelineRequest] = useState<{ id: string; title: string } | null>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -165,10 +167,10 @@ function Requests() {
         return;
       }
 
-      // Paso 2: Obtener las quotes seleccionadas (provider_id y uid por si el id del proveedor está en uid)
+      // Paso 2: Obtener las quotes seleccionadas
       const { data: quotesData, error: quotesError } = await supabase
         .from("quotes")
-        .select("id, price, provider_name, provider_id, uid")
+        .select("id, price, provider_name, provider_id")
         .in("id", quoteIds);
 
       if (quotesError) {
@@ -206,13 +208,12 @@ function Requests() {
       }
 
       // Paso 4: Obtener datos del proveedor para liberar pago (tabla users; los datos bancarios NO están en billing)
-      // Probar seller_id (billing), provider_id y uid (quotes) por si el id del proveedor está en distinta columna
       const sellerIdsFromBilling = (billingData || [])
         .map((b: any) => b.seller_id)
         .filter(Boolean);
-      const providerIdsFromQuotes = (quotesData || []).flatMap((q: any) =>
-        [q.provider_id, q.uid].filter(Boolean)
-      );
+      const providerIdsFromQuotes = (quotesData || [])
+        .map((q: any) => q.provider_id)
+        .filter(Boolean);
       const allProviderIds = [
         ...new Set([...sellerIdsFromBilling, ...providerIdsFromQuotes]),
       ];
@@ -260,7 +261,7 @@ function Requests() {
             b => b.quote_id === req.selected_quote_id
           );
           const providerId =
-            billing?.seller_id || quote?.provider_id || quote?.uid;
+            billing?.seller_id || quote?.provider_id;
           const providerDetails = providerId
             ? (providerDetailsMap[providerId] ?? null)
             : null;
@@ -851,12 +852,13 @@ function Requests() {
           </div>
         </header>
         <div className="mt-5 overflow-hidden rounded-2xl border border-slate-100">
-          <div className="grid grid-cols-[1fr,2fr,2fr,1fr,1fr] bg-slate-50 px-6 py-3 text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+          <div className="grid grid-cols-[1fr,2fr,2fr,1fr,1fr,auto] bg-slate-50 px-6 py-3 text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
             <span>ID</span>
             <span>Servicio</span>
             <span>Cliente</span>
             <span>Estado</span>
             <span className="text-right">Creada</span>
+            <span />
           </div>
           {loading ? (
             <p className="px-6 py-6 text-sm text-slate-500">
@@ -866,7 +868,7 @@ function Requests() {
             requests.map(request => (
               <div
                 key={request.id}
-                className="grid grid-cols-[1fr,2fr,2fr,1fr,1fr] items-center px-6 py-4 text-sm text-slate-600 odd:bg-white"
+                className="grid grid-cols-[1fr,2fr,2fr,1fr,1fr,auto] items-center px-6 py-4 text-sm text-slate-600 odd:bg-white"
               >
                 <span className="font-mono text-slate-500">
                   {request.id.slice(0, 8)}
@@ -885,11 +887,27 @@ function Requests() {
                 <span className="text-right text-xs text-slate-500">
                   {new Date(request.created_at).toLocaleString("es-AR")}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTimelineRequest({ id: request.id, title: request.title })}
+                  className="ml-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                  title="Ver seguimiento paso a paso"
+                >
+                  Ver seguimiento
+                </button>
               </div>
             ))
           )}
         </div>
       </section>
+
+      {selectedTimelineRequest && (
+        <RequestTimelineModal
+          requestId={selectedTimelineRequest.id}
+          requestTitle={selectedTimelineRequest.title}
+          onClose={() => setSelectedTimelineRequest(null)}
+        />
+      )}
 
       <section className="rounded-3xl border border-white/70 bg-slate-900 p-6 text-white shadow-xl">
         <header className="flex flex-wrap items-center justify-between gap-3">

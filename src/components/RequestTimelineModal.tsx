@@ -414,7 +414,7 @@ export function RequestTimelineModal({ requestId, requestTitle, onClose }: Props
                 <div className="absolute left-5 top-0 h-full w-0.5 bg-slate-100" />
 
                 <ol className="space-y-6">
-                  {events.map((event, idx) => (
+                  {events.map((event) => (
                     <li key={event.id} className="relative flex gap-4">
                       {/* Ícono del paso */}
                       <div className={`relative z-10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${event.color} text-lg shadow-sm`}>

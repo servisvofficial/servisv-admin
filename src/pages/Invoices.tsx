@@ -52,8 +52,16 @@ function getStatusBadge(estado: string | null): string {
     pendiente: "bg-yellow-100 text-yellow-800",
     rechazado: "bg-red-100 text-red-800",
     contingencia: "bg-orange-100 text-orange-800",
+    invalidado: "bg-stone-700 text-white",
+    anulado: "bg-stone-700 text-white",
   };
   return styles[estado] || "bg-gray-100 text-gray-800";
+}
+
+function isDteInvalidado(estado: string | null | undefined): boolean {
+  if (!estado) return false;
+  const e = estado.toLowerCase();
+  return e === "invalidado" || e === "anulado";
 }
 
 function getTipoDteLabel(tipo: string): string {
@@ -75,6 +83,7 @@ export default function Invoices() {
   const [selectedRowForInvalidation, setSelectedRowForInvalidation] = useState<UnifiedRow | null>(null);
   const [contingencyLoadingId, setContingencyLoadingId] = useState<string | null>(null);
   const [duplicateLoadingId, setDuplicateLoadingId] = useState<string | null>(null);
+  const [invalidationNotice, setInvalidationNotice] = useState<string | null>(null);
 
   const fetchBillingInvoices = async () => {
     try {
@@ -228,6 +237,11 @@ export default function Invoices() {
         <p className="text-gray-600 mt-2">
           Facturas a clientes y a proveedores. Gestiona DTE, contingencia, invalidación y notas de crédito/débito.
         </p>
+        {invalidationNotice && (
+          <div className="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            {invalidationNotice}
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
@@ -273,7 +287,9 @@ export default function Invoices() {
                   const fecha = isFacturador ? (inv as FacturadorInvoice).created_at : (isClient ? (inv as BillingInvoice).invoice_date : (inv as ProviderInvoice).created_at);
                   const codigo = inv.dte_codigo_generacion;
                   const sello = inv.dte_sello_recepcion;
-                  const canInvalidate = codigo && sello;
+                  const estadoDte = (inv as BillingInvoice | FacturadorInvoice | ProviderInvoice).dte_estado ?? null;
+                  const invalidado = isDteInvalidado(estadoDte);
+                  const canInvalidate = Boolean(codigo && sello && !invalidado);
                   const hasCodigo = Boolean(codigo);
                   const loadingContingency = contingencyLoadingId === inv.id;
                   const loadingDuplicate = duplicateLoadingId === inv.id;
@@ -310,11 +326,16 @@ export default function Invoices() {
                         {format(new Date(fecha), isClient ? "dd/MM/yyyy" : "dd/MM/yyyy HH:mm", { locale: es })}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500 font-mono text-xs">
-                        {codigo ? `${codigo.substring(0, 8)}...` : "-"}
+                        <div>{codigo ? `${codigo.substring(0, 8)}...` : "-"}</div>
+                        {invalidado && (
+                          <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded bg-stone-700 text-white">
+                            DTE invalidado
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <div className="flex flex-wrap gap-2">
-                          {isClient && !isFacturador && dteTipo === "03" && (
+                          {isClient && !isFacturador && !invalidado && dteTipo === "03" && (
                             <>
                               <button
                                 onClick={() => handleCreateCreditNote(inv as BillingInvoice)}
@@ -395,7 +416,9 @@ export default function Invoices() {
         const dteTipoLabel = isFacturador ? (raw as FacturadorInvoice).tipo_dte : (isClient ? (raw as BillingInvoice).dte_tipo_documento : (raw as ProviderInvoice).dte_tipo_documento);
         const ambiente = (dteJson as any)?.identificacion?.ambiente ?? "00";
         const fechaParaUrl = isFacturador ? ((raw as FacturadorInvoice).dte_fecha_emision || (raw as FacturadorInvoice).invoice_date) : (isClient ? format(new Date((raw as BillingInvoice).invoice_date), "yyyy-MM-dd") : (raw as ProviderInvoice).dte_fecha_emision);
-        const showConsultaPublica = estado === "procesado" && codigoGeneracion && fechaParaUrl;
+        const docInvalidado = isDteInvalidado(estado);
+        const showConsultaPublica =
+          !docInvalidado && estado === "procesado" && codigoGeneracion && fechaParaUrl;
 
         return (
           <>
@@ -417,6 +440,11 @@ export default function Invoices() {
                     </button>
                   </div>
                   <div className="p-6 overflow-y-auto flex-1 space-y-6">
+                    {docInvalidado && (
+                      <div className="rounded-xl border-2 border-stone-600 bg-stone-100 px-4 py-3 text-sm text-stone-900">
+                        <strong>Este DTE fue invalidado</strong> ante el Ministerio de Hacienda. No tiene validez fiscal; no debés volver a usar el botón Invalidar.
+                      </div>
+                    )}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
                         <div className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Código de generación</div>
@@ -557,7 +585,17 @@ export default function Invoices() {
           }
           invoiceType={selectedRowForInvalidation.tipo === "proveedor" ? "provider" : selectedRowForInvalidation.tipo === "facturador" ? "facturador" : "billing"}
           onClose={() => { setShowInvalidationModal(false); setSelectedRowForInvalidation(null); }}
-          onSuccess={() => { setShowInvalidationModal(false); setSelectedRowForInvalidation(null); refreshAll(); }}
+          onSuccess={(result) => {
+            setShowInvalidationModal(false);
+            setSelectedRowForInvalidation(null);
+            if (result?.sincronizadoYaInvalidadoEnMH) {
+              setInvalidationNotice(
+                "Hacienda ya tenía este documento invalidado. Se actualizó el estado en el panel y ya no podés volver a anularlo desde aquí."
+              );
+              window.setTimeout(() => setInvalidationNotice(null), 12000);
+            }
+            refreshAll();
+          }}
         />
       )}
 

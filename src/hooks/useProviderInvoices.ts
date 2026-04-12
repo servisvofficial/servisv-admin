@@ -14,7 +14,7 @@ export interface ProviderInvoice {
   dte_hora_emision: string | null;
   dte_sello_recepcion: string | null;
   dte_json: any;
-  dte_estado: "pendiente" | "procesado" | "rechazado" | "contingencia";
+  dte_estado: "pendiente" | "procesado" | "rechazado" | "contingencia" | "invalidado";
   dte_observaciones: string[] | null;
   total_compra: number;
   descripcion: string | null;

@@ -17,7 +17,7 @@ interface Props {
   /** "billing" = factura a cliente; "provider" = factura a proveedor; "facturador" = factura standalone */
   invoiceType?: "billing" | "provider" | "facturador";
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (result?: { sincronizadoYaInvalidadoEnMH?: boolean; advertenciaPersistencia?: string | null }) => void;
 }
 
 const TIPOS_INVALIDACION = [
@@ -72,11 +72,25 @@ export function CreateInvalidationModal({ invoice, invoiceType = "billing", onCl
       return;
     }
 
+    const docId = invoice?.id != null ? String(invoice.id).trim() : "";
+    if (!docId) {
+      setError("No se pudo identificar el documento (id de factura inválido).");
+      return;
+    }
+
     try {
       setLoading(true);
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+
+      // snake_case + camelCase: algunas versiones desplegadas de create-dte-events solo leían billingId
+      const idPayload =
+        invoiceType === "provider"
+          ? { provider_invoice_id: docId, providerInvoiceId: docId }
+          : invoiceType === "facturador"
+            ? { facturador_invoice_id: docId, facturadorInvoiceId: docId }
+            : { billing_id: docId, billingId: docId };
 
       const response = await fetch(
         `${supabaseUrl}/functions/v1/create-dte-events`,
@@ -89,11 +103,7 @@ export function CreateInvalidationModal({ invoice, invoiceType = "billing", onCl
           },
           body: JSON.stringify({
             type: "invalidacion",
-            ...(invoiceType === "provider"
-              ? { provider_invoice_id: invoice.id }
-              : invoiceType === "facturador"
-              ? { facturador_invoice_id: invoice.id }
-              : { billing_id: invoice.id }),
+            ...idPayload,
             motivo: motivoCustom || motivo,
             tipo_anulacion: tipoAnulacion,
             responsable,
@@ -108,7 +118,11 @@ export function CreateInvalidationModal({ invoice, invoiceType = "billing", onCl
         throw new Error(result.error || "Error al crear evento de invalidación");
       }
 
-      onSuccess();
+      if (result.advertenciaPersistencia) {
+        console.warn("Invalidación MH OK pero auditoría en dte_events:", result.advertenciaPersistencia);
+      }
+
+      onSuccess(result);
     } catch (err: any) {
       setError(err.message || "Error al crear evento de invalidación");
       console.error("Error:", err);

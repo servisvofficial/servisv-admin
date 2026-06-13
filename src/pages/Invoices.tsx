@@ -68,6 +68,30 @@ function getTipoDteLabel(tipo: string): string {
   return tipo === "03" ? "CCF (03)" : tipo === "14" ? "FSE (14)" : tipo === "01" ? "Factura (01)" : `DTE (${tipo})`;
 }
 
+function getDteMonto(dteJson: any, fallback: number): number {
+  if (!dteJson || typeof dteJson !== 'object') return fallback;
+  
+  // Intenta extraer el montoPago del array de pagos
+  if (dteJson.resumen?.pagos && Array.isArray(dteJson.resumen.pagos) && dteJson.resumen.pagos.length > 0) {
+    const montoPago = dteJson.resumen.pagos[0].montoPago;
+    if (montoPago !== undefined && montoPago !== null) {
+      return Number(montoPago);
+    }
+  }
+  
+  // Fallback a totalPagar
+  if (dteJson.resumen?.totalPagar !== undefined && dteJson.resumen.totalPagar !== null) {
+    return Number(dteJson.resumen.totalPagar);
+  }
+
+  // Fallback a montoTotalOperacion
+  if (dteJson.resumen?.montoTotalOperacion !== undefined && dteJson.resumen.montoTotalOperacion !== null) {
+    return Number(dteJson.resumen.montoTotalOperacion);
+  }
+  
+  return fallback;
+}
+
 export default function Invoices() {
   const { invoices: providerInvoices, loading: loadingProvider, error: errorProvider, fetchInvoices: fetchProviderInvoices } = useProviderInvoices();
   const { invoices: facturadorInvoices, loading: loadingFacturador, error: errorFacturador, fetchInvoices: fetchFacturadorInvoices } = useFacturadorInvoices();
@@ -279,11 +303,15 @@ export default function Invoices() {
                     : isClient
                     ? (inv as BillingInvoice).total_amount
                     : Number((inv as ProviderInvoice).billing?.total_amount ?? (inv as ProviderInvoice).total_compra);
-                  const montoFacturadoDte = isFacturador
-                    ? Number((inv as FacturadorInvoice).total_amount)
-                    : isClient
-                    ? ((inv as BillingInvoice).total_commissions ?? 0)
-                    : Number((inv as ProviderInvoice).total_compra);
+                  
+                  const montoFacturadoDte = getDteMonto(
+                    (inv as any).dte_json,
+                    isFacturador
+                      ? Number((inv as FacturadorInvoice).total_amount)
+                      : isClient
+                      ? ((inv as BillingInvoice).total_commissions ?? 0)
+                      : Number((inv as ProviderInvoice).total_compra)
+                  );
                   const fecha = isFacturador ? (inv as FacturadorInvoice).created_at : (isClient ? (inv as BillingInvoice).invoice_date : (inv as ProviderInvoice).created_at);
                   const codigo = inv.dte_codigo_generacion;
                   const sello = inv.dte_sello_recepcion;

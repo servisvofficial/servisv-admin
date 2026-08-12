@@ -1,16 +1,14 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useToast } from '../components/ui/use-toast';
-import { Link2, RefreshCw, CheckCircle, Star, Plus, X } from 'lucide-react';
+import { Link2, RefreshCw, CheckCircle, Star, Plus, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function ReviewsDashboard() {
   const [completedRequests, setCompletedRequests] = useState<any[]>([]);
-  const [providers, setProviders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [manualForm, setManualForm] = useState({ providerId: '', name: '', comment: '', rating: 5 });
   const [currentPage, setCurrentPage] = useState(1);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const itemsPerPage = 20;
   const { toast } = useToast();
 
@@ -58,10 +56,11 @@ export default function ReviewsDashboard() {
         created_at,
         reviewed_id,
         custom_reviewer_name,
+        review_status,
+        review_token,
         provider:users!reviews_reviewed_id_fkey(name, last_name)
       `)
       .is('request_id', null)
-      .not('custom_reviewer_name', 'is', null)
       .order('created_at', { ascending: false })
       .range(fromIndex, toIndex);
 
@@ -72,14 +71,14 @@ export default function ReviewsDashboard() {
     // Adaptar reseñas manuales al formato de solicitudes
     const manualItems = (manualData || []).map((r: any) => ({
       id: `manual-${r.id}`,
-      title: `Reseña Manual a ${r.provider?.name || ''} ${r.provider?.last_name || ''}`,
-      client_name: r.custom_reviewer_name || 'Anónimo',
+      title: r.review_status === 'pending' ? 'Reseña Manual (Link Generado)' : `Reseña Manual a ${r.provider?.name || ''} ${r.provider?.last_name || ''}`,
+      client_name: r.custom_reviewer_name || 'Pendiente de rellenar',
       client_id: null,
       created_at: r.created_at,
       reviews: [{
         id: r.id,
-        review_token: null,
-        review_status: 'completed',
+        review_token: r.review_token,
+        review_status: r.review_status,
         rating: r.rating,
         reviewed_id: r.reviewed_id,
         token_expires_at: null
@@ -93,14 +92,6 @@ export default function ReviewsDashboard() {
 
     setCompletedRequests(allItems);
     
-    // Fetch providers for manual reviews
-    const { data: provs } = await supabase
-      .from('users')
-      .select('id, name, last_name')
-      .eq('is_provider', true)
-      .order('name');
-    if (provs) setProviders(provs);
-    
     setLoading(false);
   };
 
@@ -108,33 +99,47 @@ export default function ReviewsDashboard() {
     fetchCompletedRequests(currentPage);
   }, [currentPage]);
 
-  const createManualReview = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!manualForm.providerId || !manualForm.name || manualForm.rating < 1) {
-      toast({ variant: 'destructive', title: 'Datos incompletos', description: 'Llena todos los campos requeridos.' });
-      return;
+  const createManualReviewLink = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('reviews')
+        .insert({
+          rating: 0,
+          review_status: 'pending',
+          is_visible: false,
+        })
+        .select('review_token')
+        .single();
+
+      if (error) throw error;
+      
+      const url = `https://servisv.com/rate/${data.review_token}`;
+      navigator.clipboard.writeText(url);
+      
+      toast({ title: 'Link Generado', description: 'El enlace ha sido copiado al portapapeles.' });
+      fetchCompletedRequests(currentPage);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Error', description: err.message });
     }
+  };
+
+  const confirmDeleteReview = async () => {
+    if (!deleteConfirmId) return;
 
     try {
       const { error } = await supabase
         .from('reviews')
-        .insert({
-          reviewed_id: manualForm.providerId,
-          custom_reviewer_name: manualForm.name,
-          comment: manualForm.comment,
-          rating: manualForm.rating,
-          review_status: 'completed',
-          is_visible: true
-        });
+        .delete()
+        .eq('id', deleteConfirmId);
 
       if (error) throw error;
       
-      toast({ title: 'Reseña Creada', description: 'La reseña se guardó correctamente y ya afecta al profesional.' });
-      setShowModal(false);
-      setManualForm({ providerId: '', name: '', comment: '', rating: 5 });
+      toast({ title: 'Reseña Eliminada', description: 'La reseña fue borrada exitosamente.' });
+      setDeleteConfirmId(null);
       fetchCompletedRequests(currentPage);
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Error', description: err.message });
+      setDeleteConfirmId(null);
     }
   };
 
@@ -214,8 +219,8 @@ export default function ReviewsDashboard() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setShowModal(true)} className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
-            <Plus className="w-4 h-4" /> Reseña Manual
+          <button onClick={createManualReviewLink} className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+            <Plus className="w-4 h-4" /> Generar Link Libre
           </button>
           <button onClick={() => fetchCompletedRequests(currentPage)} className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
             <RefreshCw className="w-4 h-4" /> Refrescar
@@ -281,6 +286,15 @@ export default function ReviewsDashboard() {
                             </button>
                           </>
                         )}
+                        {review && (
+                          <button 
+                            onClick={() => setDeleteConfirmId(review.id)} 
+                            title="Eliminar reseña"
+                            className="rounded-lg p-1.5 text-red-500 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -323,72 +337,30 @@ export default function ReviewsDashboard() {
           </div>
         </div>
       )}
-
-      {showModal && (
+      {deleteConfirmId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="flex justify-between items-center p-6 border-b border-slate-100">
-              <h3 className="font-bold text-lg text-slate-900">Crear Reseña Manual</h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden p-6 text-center">
+            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-2">Eliminar Reseña</h3>
+            <p className="text-sm text-slate-500 mb-6">
+              ¿Estás seguro de que quieres eliminar esta reseña? Esta acción no se puede deshacer.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button 
+                onClick={() => setDeleteConfirmId(null)}
+                className="flex-1 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={confirmDeleteReview}
+                className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700"
+              >
+                Eliminar
               </button>
             </div>
-            <form onSubmit={createManualReview} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Profesional a calificar</label>
-                <select 
-                  className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:border-indigo-500 focus:outline-none"
-                  value={manualForm.providerId}
-                  onChange={(e) => setManualForm({...manualForm, providerId: e.target.value})}
-                  required
-                >
-                  <option value="">Selecciona un proveedor...</option>
-                  {providers.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} {p.last_name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nombre (Inventado/Manual)</label>
-                <input 
-                  type="text"
-                  placeholder="Ej: Juan Pérez"
-                  className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:border-indigo-500 focus:outline-none"
-                  value={manualForm.name}
-                  onChange={(e) => setManualForm({...manualForm, name: e.target.value})}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Calificación (1 a 5)</label>
-                <input 
-                  type="number"
-                  min="1"
-                  max="5"
-                  className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:border-indigo-500 focus:outline-none"
-                  value={manualForm.rating}
-                  onChange={(e) => setManualForm({...manualForm, rating: parseInt(e.target.value)})}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Comentario (Opcional)</label>
-                <textarea 
-                  className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:border-indigo-500 focus:outline-none"
-                  rows={3}
-                  value={manualForm.comment}
-                  onChange={(e) => setManualForm({...manualForm, comment: e.target.value})}
-                />
-              </div>
-              <div className="pt-4 flex justify-end gap-3">
-                <button type="button" onClick={() => setShowModal(false)} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">
-                  Cancelar
-                </button>
-                <button type="submit" className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
-                  Guardar Reseña
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

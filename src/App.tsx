@@ -15,6 +15,8 @@ const navItems = [
   { to: '/fse', label: 'FSE' },
   { to: '/notas', label: 'NC/ND' },
   { to: '/eventos-dte', label: 'Eventos DTE' },
+  { to: '/auditoria-niveles', label: 'Niveles & Puntos' },
+  { to: '/dashboard-resenas', label: 'Reseñas' },
 ]
 
 function App() {

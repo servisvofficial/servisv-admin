@@ -351,7 +351,7 @@ async function getValidToken(
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0 (compatible; ServiSV-Client/1.0)",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "application/json",
       },
       body: bodyParams,
@@ -582,7 +582,7 @@ async function transmitirDTE(
       headers: {
         "Content-Type": "application/json",
         Authorization: token,
-        "User-Agent": "ServiSV-DTE-Client/1.0",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
       body: JSON.stringify({
         ambiente: ambiente,

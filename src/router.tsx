@@ -12,6 +12,8 @@ import Facturador from './pages/Facturador'
 import FSE from './pages/FSE'
 import CreditDebitNotes from './pages/CreditDebitNotes'
 import DTEEvents from './pages/DTEEvents'
+import LevelsAudit from './pages/LevelsAudit'
+import ReviewsDashboard from './pages/ReviewsDashboard'
 
 export const router = createBrowserRouter([
   {
@@ -61,6 +63,14 @@ export const router = createBrowserRouter([
       {
         path: 'eventos-dte',
         element: <DTEEvents />,
+      },
+      {
+        path: 'auditoria-niveles',
+        element: <LevelsAudit />,
+      },
+      {
+        path: 'dashboard-resenas',
+        element: <ReviewsDashboard />,
       },
     ],
   },

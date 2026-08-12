@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useToast } from '../components/ui/use-toast';
-import { Shield, Search, Star, Edit, Save, X } from 'lucide-react';
+import { Search, Star, Edit, Save, X } from 'lucide-react';
 
 export default function LevelsAudit() {
   const [users, setUsers] = useState<any[]>([]);
@@ -83,6 +83,15 @@ export default function LevelsAudit() {
       });
       setEditingId(null);
       fetchUsers();
+    }
+  };
+
+  const getLevelBadgeStyle = (level: string) => {
+    switch (level?.toLowerCase()) {
+      case 'oro': return 'bg-amber-100 text-amber-800 border-amber-300';
+      case 'plata': return 'bg-slate-100 text-slate-800 border-slate-300';
+      case 'bronce': return 'bg-orange-100 text-orange-800 border-orange-300';
+      default: return 'bg-gray-100 text-gray-800 border-gray-300';
     }
   };
 

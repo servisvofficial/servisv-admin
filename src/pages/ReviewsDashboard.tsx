@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useToast } from '../components/ui/use-toast';
-import { Link2, Mail, ExternalLink, RefreshCw, CheckCircle, Star, Plus, X } from 'lucide-react';
+import { Link2, RefreshCw, CheckCircle, Star, Plus, X } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function ReviewsDashboard() {
@@ -153,7 +153,7 @@ export default function ReviewsDashboard() {
       
       const providerId = quote.provider_id;
       
-      const { data: reviewData, error } = await supabase
+      const { error } = await supabase
         .from('reviews')
         .insert({
           request_id: requestId,

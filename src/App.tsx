@@ -17,6 +17,7 @@ const navItems = [
   { to: '/eventos-dte', label: 'Eventos DTE' },
   { to: '/auditoria-niveles', label: 'Niveles & Puntos' },
   { to: '/dashboard-resenas', label: 'Reseñas' },
+  { to: '/enlaces-proveedores', label: 'Enlaces Proveedores' },
 ]
 
 function App() {

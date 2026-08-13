@@ -14,6 +14,7 @@ import CreditDebitNotes from './pages/CreditDebitNotes'
 import DTEEvents from './pages/DTEEvents'
 import LevelsAudit from './pages/LevelsAudit'
 import ReviewsDashboard from './pages/ReviewsDashboard'
+import ProviderLinks from './pages/ProviderLinks'
 
 export const router = createBrowserRouter([
   {
@@ -71,6 +72,10 @@ export const router = createBrowserRouter([
       {
         path: 'dashboard-resenas',
         element: <ReviewsDashboard />,
+      },
+      {
+        path: 'enlaces-proveedores',
+        element: <ProviderLinks />,
       },
     ],
   },

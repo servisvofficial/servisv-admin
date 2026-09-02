@@ -298,40 +298,14 @@ async function logEgressDebugInfo(prefix: string) {
   }
 }
 
-async function getValidToken(
-  credentials: { user: string; pwd: string },
-  environment: "TEST" | "PROD" = "TEST"
-): Promise<string> {
-  if (!runtimeDebugLogged) {
-    runtimeDebugLogged = true;
-    console.log("🔎 Runtime debug (create-invoice):");
-    console.log("  - DTE_MH_API_URL:", DTE_MH_API_URL);
-    console.log("  - DTE_AMBIENTE:", DTE_AMBIENTE);
-    await logEgressDebugInfo("🛰️");
-  }
-
-  const user = (credentials.user || DTE_USER || SERVISV_NIT || "").replace(/-/g, "").trim();
-  const pwd = (credentials.pwd || DTE_PASSWORD || "").trim();
-
+async function getValidToken(): Promise<string> {
   if (tokenCache && tokenCache.expiresAt > Date.now()) {
     console.log("✓ Usando token en cache");
     return tokenCache.token;
   }
 
-  if (!authDebugFingerprintLogged) {
-    authDebugFingerprintLogged = true;
-    try {
-      const userHash = (await sha256Hex(user)).slice(0, 12);
-      const pwdHash = (await sha256Hex(pwd)).slice(0, 12);
-      const urlHash = (await sha256Hex(DTE_MH_API_URL)).slice(0, 12);
-      console.log("🧪 Fingerprint auth (no sensible):");
-      console.log("  - user_sha256_12:", userHash);
-      console.log("  - pwd_sha256_12:", pwdHash);
-      console.log("  - mh_url_sha256_12:", urlHash);
-    } catch (e) {
-      console.warn("⚠️ No se pudo generar fingerprint de auth:", e?.message || e);
-    }
-  }
+  const user = (DTE_USER || "").trim();
+  const pwd = (DTE_PASSWORD || "").trim();
 
   console.log("⚡ Solicitando nuevo token al MH...");
   const authUrl = `${DTE_MH_API_URL}/seguridad/auth`;
@@ -364,12 +338,7 @@ async function getValidToken(
 
     if (!response.ok) {
       console.error(`❌ Error HTTP ${response.status} en Auth:`, rawText.slice(0, 500));
-      if (response.status === 403) {
-        throw new Error(
-          "MH Auth 403 Forbidden: credenciales incorrectas (DTE_USER/DTE_PASSWORD), URL incorrecta (DTE_MH_API_URL: pruebas vs producción), o IP de Supabase no autorizada por Hacienda. Revisa los secrets de la Edge Function."
-        );
-      }
-      throw new Error(`Error MH Auth: ${response.status} ${response.statusText}`);
+      throw new Error(`MH Auth ${response.status} ${response.statusText}: ${rawText.slice(0, 300)}`);
     }
 
     // Log para ver exactamente qué devuelve Hacienda (útil si no devuelve token)
@@ -383,7 +352,6 @@ async function getValidToken(
       throw new Error("MH no devolvió JSON válido (¿URL correcta? DTE_MH_API_URL)");
     }
 
-    // MH puede devolver token en body.token, token, accessToken o data.token
     const token =
       data.body?.token ??
       data.token ??
@@ -405,10 +373,10 @@ async function getValidToken(
     return token;
   } catch (error: any) {
     if (error.name === "AbortError") {
-      console.error("❌ TIMEOUT: Hacienda no respondió en 15 segundos. Posible bloqueo de IP.");
-      throw new Error("Timeout conectando con Hacienda. Tu IP de Supabase podría estar bloqueada.");
+      console.error("❌ TIMEOUT: Hacienda no respondió en 15 segundos.");
+      throw new Error("Timeout conectando con Hacienda.");
     }
-    console.error("❌ Error crítico en getValidToken:", error.message);
+    console.error("❌ Error en getValidToken:", error.message || error);
     throw error;
   }
 }
@@ -1943,10 +1911,7 @@ serve(async (req) => {
             codigoGeneracion: dteGeneradoProv.identificacion.codigoGeneracion,
           };
         } else {
-          const tokenProv = await getValidToken(
-            { user: DTE_USER, pwd: DTE_PASSWORD },
-            DTE_AMBIENTE === "00" ? "TEST" : "PROD"
-          );
+          const tokenProv = await getValidToken();
           responseProv = await transmitirDTE(
             dteFirmadoProv,
             SERVISV_NIT,

@@ -310,8 +310,8 @@ async function getValidToken(
     await logEgressDebugInfo("🛰️");
   }
 
-  const user = (credentials.user || "").trim();
-  const pwd = (credentials.pwd || "").trim();
+  const user = (credentials.user || DTE_USER || SERVISV_NIT || "").replace(/-/g, "").trim();
+  const pwd = (credentials.pwd || DTE_PASSWORD || "").trim();
 
   if (tokenCache && tokenCache.expiresAt > Date.now()) {
     console.log("✓ Usando token en cache");

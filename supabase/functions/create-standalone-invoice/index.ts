@@ -1811,7 +1811,32 @@ serve(async (req) => {
         .eq("id", facturadorInvoiceId)
         .single();
       if (existingError || !existing) throw new Error("No se encontró la factura");
-      if (existing.dte_codigo_generacion) throw new Error("Esta factura ya tiene DTE generado");
+      if (existing.dte_codigo_generacion && existing.dte_estado !== "contingencia") {
+        throw new Error("Esta factura ya tiene DTE generado");
+      }
+
+      existingInvoice = existing;
+      amount = Number(existing.total_amount);
+      conceptDte = existing.concept;
+      destinoDte = existing.destino;
+      fiscalData = existing.fiscal_data;
+      tipoDteFinal = existing.tipo_dte as "01" | "03";
+    } else if (bodyParams.facturadorInvoiceId) {
+      console.log("[CreateStandaloneInvoice] Rama: Transmitir factura facturador al MH");
+      const facturadorInvoiceId = bodyParams.facturadorInvoiceId as string;
+      const { data: existing, error: existingError } = await supabase
+        .from("facturador_invoices")
+        .select("*")
+        .eq("id", facturadorInvoiceId)
+        .single();
+      if (existingError || !existing) throw new Error("No se encontró la factura");
+
+      if (existing.dte_estado === "procesado" && existing.dte_sello_recepcion) {
+        return new Response(
+          JSON.stringify({ success: true, message: "La factura ya está procesada", invoiceId: existing.id }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
       existingInvoice = existing;
       amount = Number(existing.total_amount);
@@ -1884,33 +1909,53 @@ serve(async (req) => {
     let dteFechaProv: string | null = null;
     let dteHoraProv: string | null = null;
     
+    const emitirEnContingencia = bodyParams.emitirEnContingencia === true;
+
     // Validar en que ambiente estamos corriendo para ver si generamos DTE
-    if (EJECUTAR_DTE) {
+    if (EJECUTAR_DTE || emitirEnContingencia) {
       try {
         let dteGeneradoProv: DTE_CreditoFiscal | DTE_FacturaConsumidorFinal;
-        if (tipoDteFinal === "03") {
+        if (existingInvoice?.dte_json && existingInvoice.dte_json.identificacion?.codigoGeneracion) {
+          console.log("ℹ️ Usando DTE JSON existente para mantener el código de generación");
+          dteGeneradoProv = existingInvoice.dte_json;
+          tipoDteFinal = dteGeneradoProv.identificacion.tipoDte as "01" | "03";
+        } else if (tipoDteFinal === "03") {
           dteGeneradoProv = await generarCreditoFiscal(optionsProvider, DTE_AMBIENTE);
         } else {
           dteGeneradoProv = await generarFacturaConsumidorFinal(optionsProvider, DTE_AMBIENTE);
         }
-        const tokenProv = await getValidToken(
-          { user: DTE_USER, pwd: DTE_PASSWORD },
-          DTE_AMBIENTE === "00" ? "TEST" : "PROD"
-        );
+
         const dteFirmadoProv = await firmarDTEAuto(dteGeneradoProv, {
           nit: SERVISV_NIT.replace(/-/g, ""),
           certificatePassword: DTE_CERTIFICADO_PASSWORD,
           firmadorUrl: DTE_FIRMADOR_URL,
           usarServicioFirmador: DTE_USAR_SERVICIO_FIRMADOR,
         });
-        const responseProv = await transmitirDTE(
-          dteFirmadoProv,
-          SERVISV_NIT,
-          tokenProv,
-          DTE_AMBIENTE,
-          tipoDteFinal as "01" | "03",
-          dteGeneradoProv.identificacion.version
-        );
+
+        let responseProv: any = null;
+        if (emitirEnContingencia) {
+          console.log("🟧 Modo contingencia: DTE generado sin transmisión al MH");
+          responseProv = {
+            estado: "CONTINGENCIA",
+            mensaje: "DTE generado sin transmisión (contingencia)",
+            observaciones: ["CONTINGENCIA"],
+            selloRecibido: null,
+            codigoGeneracion: dteGeneradoProv.identificacion.codigoGeneracion,
+          };
+        } else {
+          const tokenProv = await getValidToken(
+            { user: DTE_USER, pwd: DTE_PASSWORD },
+            DTE_AMBIENTE === "00" ? "TEST" : "PROD"
+          );
+          responseProv = await transmitirDTE(
+            dteFirmadoProv,
+            SERVISV_NIT,
+            tokenProv,
+            DTE_AMBIENTE,
+            tipoDteFinal as "01" | "03",
+            dteGeneradoProv.identificacion.version
+          );
+        }
 
         dteCodigoProv = responseProv.codigoGeneracion || dteGeneradoProv.identificacion.codigoGeneracion;
         dteNumeroControlProv = dteGeneradoProv.identificacion.numeroControl;
@@ -1919,14 +1964,17 @@ serve(async (req) => {
         dteHoraProv = dteGeneradoProv.identificacion.horEmi;
         dteJsonProv = dteGeneradoProv;
         dteEstadoProv =
-          responseProv.estado === "PROCESADO" || responseProv.estado === "RECIBIDO"
-            ? "procesado"
-            : responseProv.estado === "CONTINGENCIA"
-              ? "contingencia"
+          responseProv.estado === "CONTINGENCIA"
+            ? "contingencia"
+            : responseProv.estado === "PROCESADO" || responseProv.estado === "RECIBIDO"
+              ? "procesado"
               : "rechazado";
       } catch (errProv: any) {
         console.error("Error DTE (excepción):", errProv?.message || errProv);
         dteEstadoProv = "rechazado";
+        if (emitirEnContingencia) {
+          throw errProv;
+        }
       }
     } else {
       console.log("DTE no ejecutado. Configure DTE_HABILITADO=true para generar y transmitir.");

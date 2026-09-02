@@ -107,6 +107,7 @@ export default function Invoices() {
   const [selectedRowForInvalidation, setSelectedRowForInvalidation] = useState<UnifiedRow | null>(null);
   const [contingencyLoadingId, setContingencyLoadingId] = useState<string | null>(null);
   const [duplicateLoadingId, setDuplicateLoadingId] = useState<string | null>(null);
+  const [transmittingId, setTransmittingId] = useState<string | null>(null);
   const [invalidationNotice, setInvalidationNotice] = useState<string | null>(null);
 
   const fetchBillingInvoices = async () => {
@@ -120,7 +121,8 @@ export default function Invoices() {
       if (fetchError) throw fetchError;
       setBillingInvoices(data || []);
     } catch (err: any) {
-      setBillingError(err.message || "Error al cargar facturas a cliente");
+      setBillingError(err.message || "Error al cargar facturas");
+      console.error(err);
     } finally {
       setLoadingBilling(false);
     }
@@ -176,6 +178,7 @@ export default function Invoices() {
       if (row.tipo === "cliente") {
         body.billingId = row.raw.id;
       } else if (row.tipo === "proveedor") {
+        endpoint = "create-provider-invoice";
         body.providerInvoiceId = row.raw.id;
       } else if (row.tipo === "facturador") {
         endpoint = "create-standalone-invoice";
@@ -197,6 +200,40 @@ export default function Invoices() {
     }
   };
 
+  const handleTransmitToMH = async (row: UnifiedRow) => {
+    setTransmittingId(row.raw.id);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+      
+      let endpoint = "create-invoice";
+      let body: any = {};
+      
+      if (row.tipo === "cliente") {
+        body.billingId = row.raw.id;
+      } else if (row.tipo === "proveedor") {
+        endpoint = "create-provider-invoice";
+        body.providerInvoiceId = row.raw.id;
+      } else if (row.tipo === "facturador") {
+        endpoint = "create-standalone-invoice";
+        body.facturadorInvoiceId = row.raw.id;
+      }
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceRoleKey}` },
+        body: JSON.stringify(body),
+      });
+      const result = await response.json();
+      if (!response.ok || result?.success === false) throw new Error(result?.error || result?.message || "Error al transmitir DTE al Ministerio de Hacienda");
+      refreshAll();
+    } catch (err: any) {
+      setBillingError(err.message || "Error al transmitir DTE a Hacienda");
+    } finally {
+      setTransmittingId(null);
+    }
+  };
+
   const handleDuplicateForContingency = async (row: UnifiedRow) => {
     setDuplicateLoadingId(row.raw.id);
     try {
@@ -209,6 +246,7 @@ export default function Invoices() {
       if (row.tipo === "cliente") {
         body.billingId = row.raw.id;
       } else if (row.tipo === "proveedor") {
+        endpoint = "create-provider-invoice";
         body.providerInvoiceId = row.raw.id;
       } else if (row.tipo === "facturador") {
         endpoint = "create-standalone-invoice";
@@ -388,6 +426,16 @@ export default function Invoices() {
                               title="Invalidar Documento"
                             >
                               Invalidar
+                            </button>
+                          )}
+                          {(!sello || estadoDte === "contingencia" || estadoDte === "pendiente") && !invalidado && (
+                            <button
+                              onClick={() => handleTransmitToMH(row)}
+                              className="px-3 py-1 bg-emerald-600 text-white text-xs rounded hover:bg-emerald-700 disabled:opacity-50 font-medium"
+                              title="Transmitir DTE al Ministerio de Hacienda"
+                              disabled={transmittingId === row.raw.id}
+                            >
+                              {transmittingId === row.raw.id ? "Transmitiendo..." : "Transmitir MH"}
                             </button>
                           )}
                           <button

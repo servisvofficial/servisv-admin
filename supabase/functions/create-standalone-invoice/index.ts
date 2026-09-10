@@ -321,18 +321,40 @@ async function getValidToken(): Promise<string> {
 
     console.log("📤 Conectando a:", authUrl);
 
-    const response = await fetch(authUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json",
-      },
-      body: bodyParams,
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
+    let response: Response;
+    try {
+      response = await fetch(authUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "application/json",
+        },
+        body: bodyParams,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+    } catch (fetchErr: any) {
+      clearTimeout(timeoutId);
+      console.warn("⚠️ Primer intento de conexión en getValidToken falló, reintentando en 1s...", fetchErr?.message || fetchErr);
+      await new Promise((r) => setTimeout(r, 1000));
+      const retryController = new AbortController();
+      const retryTimeoutId = setTimeout(() => retryController.abort(), 15000);
+      try {
+        response = await fetch(authUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json",
+          },
+          body: bodyParams,
+          signal: retryController.signal,
+        });
+      } finally {
+        clearTimeout(retryTimeoutId);
+      }
+    }
 
     const rawText = await response.text();
 
@@ -545,24 +567,48 @@ async function transmitirDTE(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 s timeout MH
 
-    const response = await fetch(transmissionUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: token,
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      },
-      body: JSON.stringify({
-        ambiente: ambiente,
-        idEnvio: Math.floor(Math.random() * 1000000),
-        version: version,
-        tipoDte: tipoDte,
-        documento: dteFirmado,
-      }),
-      signal: controller.signal,
+    const reqBody = JSON.stringify({
+      ambiente: ambiente,
+      idEnvio: Math.floor(Math.random() * 1000000),
+      version: version,
+      tipoDte: tipoDte,
+      documento: dteFirmado,
     });
 
-    clearTimeout(timeoutId);
+    let response: Response;
+    try {
+      response = await fetch(transmissionUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token,
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+        body: reqBody,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+    } catch (fetchErr: any) {
+      clearTimeout(timeoutId);
+      console.warn("⚠️ Primer intento de transmisión DTE falló, reintentando en 1.5s...", fetchErr?.message || fetchErr);
+      await new Promise((r) => setTimeout(r, 1500));
+      const retryController = new AbortController();
+      const retryTimeoutId = setTimeout(() => retryController.abort(), 20000);
+      try {
+        response = await fetch(transmissionUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: token,
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          },
+          body: reqBody,
+          signal: retryController.signal,
+        });
+      } finally {
+        clearTimeout(retryTimeoutId);
+      }
+    }
 
     if (!response.ok) {
       const errorText = await response.text();

@@ -3,6 +3,13 @@ import { DEPARTAMENTOS, getMunicipios } from "../data/departamentosMunicipios";
 
 // Catálogo de actividades económicas (Ministerio de Hacienda El Salvador)
 const ACTIVIDADES_ECONOMICAS = [
+  { codigo: "20130", descripcion: "FABRICACIÓN DE PLÁSTICO Y CAUCHO EN FORMAS PRIMARIAS" },
+  { codigo: "22110", descripcion: "FABRICACIÓN DE CUBIERTAS Y CÁMARAS DE CAUCHO; RECAUCHUTADO Y RENOVACIÓN DE CUBIERTAS DE CAUCHO" },
+  { codigo: "22190", descripcion: "FABRICACIÓN DE OTROS PRODUCTOS DE CAUCHO" },
+  { codigo: "22201", descripcion: "FABRICACIÓN DE ENVASES PLÁSTICOS Y CAUCHOS" },
+  { codigo: "22202", descripcion: "FABRICACIÓN DE PRODUCTOS PLÁSTICOS PARA USO PERSONAL O DOMÉSTICO" },
+  { codigo: "22208", descripcion: "MAQUILA DE PLÁSTICOS" },
+  { codigo: "22209", descripcion: "FABRICACIÓN DE PRODUCTOS PLÁSTICOS N.C.P." },
   { codigo: "62010", descripcion: "PORTALES WEB" },
   { codigo: "62020", descripcion: "DISEÑO Y DESARROLLO DE SOFTWARE" },
   { codigo: "62090", descripcion: "OTRAS ACTIVIDADES DE TECNOLOGÍA DE LA INFORMACIÓN" },
@@ -503,9 +510,11 @@ export default function Facturador() {
                       />
                     </div>
                   )}
-                  {tipoDte === "03" && (
+                  {(tipoDte === "03" || usarDatosReceptor) && (
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Código de Actividad Económica *</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Código de Actividad Económica {tipoDte === "03" ? "*" : "(opcional)"}
+                      </label>
                       <select
                         value={codActividad}
                         onChange={(e) => {
@@ -520,18 +529,24 @@ export default function Facturador() {
                           <option key={a.codigo} value={a.codigo}>{a.codigo} - {a.descripcion}</option>
                         ))}
                       </select>
-                      <p className="text-xs text-gray-500 mt-1">Requerido para Crédito Fiscal (CCF)</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {tipoDte === "03" ? "Requerido para Crédito Fiscal (CCF)" : "Opcional para Factura"}
+                      </p>
                     </div>
                   )}
-                  {tipoDte === "03" && descActividad && (
+                  {(tipoDte === "03" || usarDatosReceptor) && descActividad && (
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Descripción de Actividad Económica</label>
                       <input
                         type="text"
                         value={descActividad}
-                        readOnly
-                        className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-md text-gray-600"
+                        onChange={(e) => setDescActividad(e.target.value)}
+                        maxLength={150}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-violet-500"
                       />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Se completa según el código CAT-019 (MH). Puede ajustarse si la tarjeta NRC especifica otra descripción.
+                      </p>
                     </div>
                   )}
                   <div className="md:col-span-2">

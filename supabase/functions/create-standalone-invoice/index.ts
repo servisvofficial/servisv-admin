@@ -1346,8 +1346,8 @@ async function generarFacturaConsumidorFinal(
     numDocumento: numDocumento,
     nrc: nrcReceptor, // null si no es NIT, o el NRC si es NIT
     nombre: options.fiscalData.nombre_completo || "Consumidor Final",
-    codActividad: RECEPTOR_COD_ACTIVIDAD_DEFAULT,
-    descActividad: RECEPTOR_DESC_ACTIVIDAD_DEFAULT,
+    codActividad: options.fiscalData.cod_actividad || RECEPTOR_COD_ACTIVIDAD_DEFAULT,
+    descActividad: options.fiscalData.desc_actividad || RECEPTOR_DESC_ACTIVIDAD_DEFAULT,
     direccion: {
       departamento: deptoFormateado,
       municipio: muniFormateado,

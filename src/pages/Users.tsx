@@ -10,14 +10,37 @@ const dateFormatter = new Intl.DateTimeFormat('es-AR', {
 })
 
 function Users() {
-  const { data: users, loading, error, refetch } = useUsersData()
-  const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [banning, setBanning] = useState<string | null>(null)
   const [showBanDialog, setShowBanDialog] = useState(false)
   const [userToBan, setUserToBan] = useState<{ id: string; name: string; is_banned: boolean } | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 20
+
+  // Debounce para la búsqueda en backend
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm)
+      setCurrentPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchTerm])
+
+  const {
+    data: users,
+    totalCount,
+    loading,
+    error,
+    refetch,
+    stats: hookStats,
+    topCategories: hookTopCategories,
+  } = useUsersData({
+    page: currentPage,
+    pageSize: itemsPerPage,
+    search: debouncedSearch,
+  })
+  const { toast } = useToast()
 
   // Refetch cuando se monta el componente (para sincronizar con cambios de otras páginas)
   useEffect(() => {
@@ -50,83 +73,36 @@ function Users() {
   }, [refetch])
 
   const stats = useMemo(() => {
-    const providers = users.filter((user) => user.is_provider)
-    const validatedProviders = providers.filter((user) => user.is_validated)
-    const pendingProviders = providers.filter((user) => !user.is_validated)
-    const bannedUsers = users.filter((user) => user.is_banned)
-
     return [
       {
         label: 'Total registrados',
-        value: users.length,
+        value: hookStats?.total ?? 0,
         helper: 'Usuarios únicos en la plataforma',
       },
       {
         label: 'Proveedores activos',
-        value: validatedProviders.length,
+        value: hookStats?.activeProviders ?? 0,
         helper: 'Con credenciales aprobadas',
       },
       {
         label: 'Pendientes de validación',
-        value: pendingProviders.length,
+        value: hookStats?.pendingProviders ?? 0,
         helper: 'Requieren revisión manual',
       },
       {
         label: 'Bloqueados / vetados',
-        value: bannedUsers.length,
+        value: hookStats?.bannedUsers ?? 0,
         helper: 'Usuarios que no pueden operar',
       },
     ]
-  }, [users])
+  }, [hookStats])
 
-  const topCategories = useMemo(() => {
-    const counter = new Map<string, number>()
-    users.forEach((user) => {
-      // Contar por nombres de categorías
-      if (user.serviceCategories && user.serviceCategories.length > 0) {
-        user.serviceCategories.forEach((cat) => {
-          const categoryName = typeof cat === 'string' ? cat : cat.category
-          counter.set(categoryName, (counter.get(categoryName) ?? 0) + 1)
-        })
-      }
-    })
+  const topCategories = hookTopCategories ?? []
 
-    return [...counter.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4)
-      .map(([category, count]) => ({ category, count }))
-  }, [users])
-
-  // Filtrar usuarios según el término de búsqueda
-  const filteredUsers = useMemo(() => {
-    if (!searchTerm.trim()) {
-      return users
-    }
-
-    const term = searchTerm.toLowerCase().trim()
-    return users.filter((user) => {
-      const fullName = `${user.name} ${user.last_name}`.toLowerCase()
-      const email = user.email?.toLowerCase() || ''
-      const dui = user.dui?.toLowerCase() || ''
-
-      return (
-        fullName.includes(term) ||
-        email.includes(term) ||
-        dui.includes(term)
-      )
-    })
-  }, [users, searchTerm])
-
-  // Paginación
-  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage)
+  // Paginación desde backend
+  const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage))
   const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = startIndex + itemsPerPage
-  const paginatedUsers = useMemo(() => filteredUsers.slice(startIndex, endIndex), [filteredUsers, startIndex, endIndex])
-
-  // Resetear a página 1 cuando cambia el término de búsqueda
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [searchTerm])
+  const endIndex = Math.min(startIndex + itemsPerPage, totalCount)
 
   const handleBanClick = (userId: string, userName: string, isBanned: boolean) => {
     setUserToBan({ id: userId, name: userName, is_banned: isBanned })
@@ -234,7 +210,7 @@ function Users() {
             </p>
           </div>
           <span className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white">
-            {loading ? '—' : `${users.filter((u) => u.is_provider).length} proveedores`}
+            {loading && !hookStats ? '—' : `${hookStats?.totalProviders ?? 0} proveedores`}
           </span>
         </header>
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -285,12 +261,12 @@ function Users() {
             <div className="mt-2 flex items-center justify-between">
               {searchTerm && (
                 <p className="text-xs text-slate-500">
-                  {filteredUsers.length} {filteredUsers.length === 1 ? 'usuario encontrado' : 'usuarios encontrados'}
+                  {totalCount} {totalCount === 1 ? 'usuario encontrado' : 'usuarios encontrados'}
                 </p>
               )}
               {!searchTerm && (
                 <p className="text-xs text-slate-500">
-                  Mostrando {startIndex + 1}-{Math.min(endIndex, filteredUsers.length)} de {filteredUsers.length} usuarios
+                  Mostrando {totalCount > 0 ? startIndex + 1 : 0}-{endIndex} de {totalCount} usuarios
                 </p>
               )}
             </div>
@@ -316,14 +292,14 @@ function Users() {
             <tr>
               <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-500">Cargando datos…</td>
             </tr>
-          ) : paginatedUsers.length === 0 ? (
+          ) : users.length === 0 ? (
             <tr>
               <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-500">
                 {searchTerm ? 'No se encontraron usuarios con ese criterio de búsqueda.' : 'No hay usuarios registrados.'}
               </td>
             </tr>
           ) : (
-            paginatedUsers.map((user) => (
+            users.map((user) => (
               <tr
                 key={user.id}
                 className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors"
@@ -333,9 +309,11 @@ function Users() {
                   <p className="text-xs text-slate-500 mt-0.5 break-all">{user.email}</p>
                 </td>
                 <td className="px-4 py-3 align-top text-sm font-mono text-slate-700">{user.dui || '—'}</td>
-                <td className="px-4 py-3 align-top text-sm text-slate-700">{user.rol === 'provider' ? 'Proveedor' : 'Cliente'}</td>
+                <td className="px-4 py-3 align-top text-sm text-slate-700">
+                  {user.is_provider || user.rol === 'provider' ? 'Proveedor' : 'Cliente'}
+                </td>
                 <td className="px-4 py-3 align-top">
-                  {user.rol === 'provider' && user.serviceCategories && user.serviceCategories.length > 0 ? (
+                  {(user.is_provider || user.rol === 'provider') && user.serviceCategories && user.serviceCategories.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
                       {user.serviceCategories.map((c, i) => (
                         <span
@@ -406,7 +384,7 @@ function Users() {
           </div>
 
           {/* Paginación */}
-          {!loading && filteredUsers.length > itemsPerPage && (
+          {!loading && totalCount > itemsPerPage && (
             <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50/50 px-6 py-4">
               <div className="text-sm text-slate-600">
                 Página {currentPage} de {totalPages}

@@ -83,24 +83,35 @@ export function useReportsData(): UseReportsDataState {
           `Cargados ${usersData.length} usuarios de ${userIds.length} IDs solicitados`
         );
 
-        // Cargar categorías y subcategorías desde user_professional_services con JOINs
+        // Cargar categorías y subcategorías desde user_professional_services con JOINs paginados
         const providerIds = usersData.filter(u => u.is_provider).map(u => u.id);
         if (providerIds.length > 0) {
-          const { data: servicesData, error: servicesError } = await supabase
-            .from("user_professional_services")
-            .select(
+          let servicesData: any[] = [];
+          const CHUNK_SIZE = 1000;
+          let from = 0;
+          while (true) {
+            const { data: chunk, error: servicesError } = await supabase
+              .from("user_professional_services")
+              .select(
+                `
+                user_id,
+                category_id,
+                subcategory_id,
+                categories (id, name),
+                subcategories (id, name)
               `
-              user_id,
-              category_id,
-              subcategory_id,
-              categories (id, name),
-              subcategories (id, name)
-            `
-            )
-            .in("user_id", providerIds);
+              )
+              .in("user_id", providerIds)
+              .range(from, from + CHUNK_SIZE - 1);
 
-          if (servicesError) {
-            console.error("Error al cargar servicios profesionales:", servicesError);
+            if (servicesError) {
+              console.error("Error al cargar servicios profesionales:", servicesError);
+              break;
+            }
+            if (!chunk || chunk.length === 0) break;
+            servicesData.push(...chunk);
+            if (chunk.length < CHUNK_SIZE) break;
+            from += CHUNK_SIZE;
           }
 
           if (servicesData) {

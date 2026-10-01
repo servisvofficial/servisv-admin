@@ -1,5 +1,9 @@
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import {
+  getDepartamentoLabel,
+  getMunicipioLabel,
+} from "../data/departamentosMunicipios";
 
 interface FSEDetailModalProps {
   fse: any;
@@ -182,9 +186,12 @@ export function FSEDetailModal({ fse, onClose }: FSEDetailModalProps) {
                         <div className="font-medium text-gray-900">
                           {fse.sujeto_excluido.direccion.complemento}
                           {" · "}
-                          Depto: {fse.sujeto_excluido.direccion.departamento}
+                          Depto: {getDepartamentoLabel(fse.sujeto_excluido.direccion.departamento)}
                           {" · "}
-                          Municipio: {fse.sujeto_excluido.direccion.municipio}
+                          Municipio: {getMunicipioLabel(
+                            fse.sujeto_excluido.direccion.departamento,
+                            fse.sujeto_excluido.direccion.municipio
+                          )}
                         </div>
                       </div>
                     )}

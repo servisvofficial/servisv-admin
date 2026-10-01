@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import {
+  DEPARTAMENTOS,
+  getMunicipios,
+  getDistritos,
+  findMunicipioByDistrito,
+} from "../data/departamentosMunicipios";
 
 interface Invoice {
   id: string;
@@ -34,16 +40,49 @@ export function CreateFSEModal({ invoice, onClose, onSuccess }: Props) {
   const [nombre, setNombre] = useState("");
   const [departamento, setDepartamento] = useState("");
   const [municipio, setMunicipio] = useState("");
+  const [distrito, setDistrito] = useState("");
   const [direccion, setDireccion] = useState("");
   const [telefono, setTelefono] = useState("");
   const [correo, setCorreo] = useState("");
   const [codActividad, setCodActividad] = useState("");
   const [descActividad, setDescActividad] = useState("");
 
-  // Limpiar municipio cuando cambie el departamento
+  const municipiosDisponibles = departamento ? getMunicipios(departamento) : [];
+  const distritosDisponibles = departamento
+    ? getDistritos(departamento, municipio || undefined)
+    : [];
+
+  // Al cambiar departamento, limpiar municipio y distrito
   const handleDepartamentoChange = (value: string) => {
     setDepartamento(value);
-    setMunicipio(""); // Reset municipio cuando cambia departamento
+    setMunicipio("");
+    setDistrito("");
+  };
+
+  const handleMunicipioChange = (value: string) => {
+    setMunicipio(value);
+    // Si hay un distrito seleccionado y no pertenece al municipio elegido, limpiarlo
+    if (distrito && departamento) {
+      const muniInfo = municipiosDisponibles.find((m) => m.codigo === value);
+      if (
+        muniInfo &&
+        !muniInfo.distritos.some(
+          (d) => d.toLowerCase() === distrito.toLowerCase()
+        )
+      ) {
+        setDistrito("");
+      }
+    }
+  };
+
+  const handleDistritoChange = (value: string) => {
+    setDistrito(value);
+    if (value && departamento) {
+      const foundMuni = findMunicipioByDistrito(departamento, value);
+      if (foundMuni) {
+        setMunicipio(foundMuni.codigo);
+      }
+    }
   };
 
   const [loading, setLoading] = useState(false);
@@ -71,6 +110,12 @@ export function CreateFSEModal({ invoice, onClose, onSuccess }: Props) {
         return;
       }
 
+      // Complemento de dirección: si se especificó distrito y no está en la dirección, se añade
+      let complementoFinal = direccion.trim();
+      if (distrito && !complementoFinal.toLowerCase().includes(distrito.toLowerCase())) {
+        complementoFinal = `${complementoFinal}, Distrito de ${distrito}`;
+      }
+
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
@@ -95,10 +140,11 @@ export function CreateFSEModal({ invoice, onClose, onSuccess }: Props) {
             nombre: nombre.trim(),
             codActividad: codActividad.trim() ? codActividad.trim() : null,
             descActividad: descActividad.trim() ? descActividad.trim() : null,
+            distrito: distrito ? distrito.trim() : null,
             direccion: {
               departamento: departamento.trim(),
               municipio: municipio.trim(),
-              complemento: direccion.trim(),
+              complemento: complementoFinal,
             },
             telefono: telefono.trim() ? telefono.trim() : null,
             correo: correo.trim() ? correo.trim() : null,
@@ -299,84 +345,65 @@ export function CreateFSEModal({ invoice, onClose, onSuccess }: Props) {
                         required
                       >
                         <option value="">Selecciona un departamento</option>
-                        <option value="01">Ahuachapán</option>
-                        <option value="02">Santa Ana</option>
-                        <option value="03">Sonsonate</option>
-                        <option value="04">Chalatenango</option>
-                        <option value="05">La Libertad</option>
-                        <option value="06">San Salvador</option>
-                        <option value="07">Cuscatlán</option>
-                        <option value="08">La Paz</option>
-                        <option value="09">Cabañas</option>
-                        <option value="10">San Vicente</option>
-                        <option value="11">Usulután</option>
-                        <option value="12">San Miguel</option>
-                        <option value="13">Morazán</option>
-                        <option value="14">La Unión</option>
+                        {DEPARTAMENTOS.map((d) => (
+                          <option key={d.value} value={d.value}>
+                            {d.label} ({d.value})
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Municipio *</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Municipio (CAT-013 2024) *</label>
                       <select
                         value={municipio}
-                        onChange={(e) => setMunicipio(e.target.value)}
+                        onChange={(e) => handleMunicipioChange(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         disabled={!departamento}
                         required
                       >
                         <option value="">Selecciona un municipio</option>
-                        {departamento === "06" && (
-                          <>
-                            <option value="01">San Salvador</option>
-                            <option value="02">Aguilares</option>
-                            <option value="03">Apopa</option>
-                            <option value="04">Ayutuxtepeque</option>
-                            <option value="05">Cuscatancingo</option>
-                            <option value="06">Delgado</option>
-                            <option value="07">Ilopango</option>
-                            <option value="08">Mejicanos</option>
-                            <option value="09">Nejapa</option>
-                            <option value="10">Panchimalco</option>
-                            <option value="11">Rosario de Mora</option>
-                            <option value="12">San Marcos</option>
-                            <option value="13">San Martín</option>
-                            <option value="14">Santiago Texacuangos</option>
-                            <option value="15">Santo Tomás</option>
-                            <option value="16">Soyapango</option>
-                            <option value="17">Tonacatepeque</option>
-                            <option value="18">Guazapa</option>
-                            <option value="19">San Bartolomé Perulapía</option>
-                          </>
-                        )}
-                        {departamento === "05" && (
-                          <>
-                            <option value="01">Santa Tecla</option>
-                            <option value="02">Antiguo Cuscatlán</option>
-                            <option value="03">Ciudad Arce</option>
-                            <option value="04">Colón</option>
-                            <option value="05">Comasagua</option>
-                            <option value="06">Huizúcar</option>
-                            <option value="07">Jayaque</option>
-                            <option value="08">Jicalapa</option>
-                            <option value="09">La Libertad</option>
-                            <option value="10">Nuevo Cuscatlán</option>
-                            <option value="11">San Juan Opico</option>
-                            <option value="12">Quezaltepeque</option>
-                            <option value="13">Sacacoyo</option>
-                            <option value="14">San José Villanueva</option>
-                            <option value="15">San Matías</option>
-                            <option value="16">San Pablo Tacachico</option>
-                            <option value="17">Tamanique</option>
-                            <option value="18">Talnique</option>
-                            <option value="19">Teotepeque</option>
-                            <option value="20">Tepecoyo</option>
-                            <option value="21">Zaragoza</option>
-                          </>
-                        )}
-                        {departamento && !["05", "06"].includes(departamento) && (
-                          <option value="01">Municipio 01</option>
-                        )}
+                        {municipiosDisponibles.map((m) => (
+                          <option key={m.codigo} value={m.codigo}>
+                            {m.nombre} ({m.codigo})
+                          </option>
+                        ))}
                       </select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Distrito <span className="text-gray-400 font-normal">(opcional · auto-selecciona el municipio)</span>
+                        </label>
+                        {distrito && (
+                          <button
+                            type="button"
+                            onClick={() => setDistrito("")}
+                            className="text-xs text-emerald-600 hover:text-emerald-800 font-medium"
+                          >
+                            Limpiar distrito
+                          </button>
+                        )}
+                      </div>
+                      <select
+                        value={distrito}
+                        onChange={(e) => handleDistritoChange(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        disabled={!departamento}
+                      >
+                        <option value="">
+                          {departamento
+                            ? "Selecciona un distrito para asignar municipio automáticamente (ej. Soyapango, Santa Tecla, San Juan Opico...)"
+                            : "Primero selecciona un departamento"}
+                        </option>
+                        {distritosDisponibles.map((d) => (
+                          <option key={`${d.municipioCodigo}-${d.nombre}`} value={d.nombre}>
+                            {d.nombre} {!municipio ? `— ${d.municipioNombre}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Si conoces el distrito histórico (antiguo municipio), selecciónalo para que el formulario asigne automáticamente el municipio correspondiente según la reforma 2024.
+                      </p>
                     </div>
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-2">Dirección (complemento) *</label>

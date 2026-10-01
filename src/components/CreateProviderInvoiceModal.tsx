@@ -1,4 +1,8 @@
 import { useState } from "react";
+import {
+  DEPARTAMENTOS,
+  getMunicipios,
+} from "../data/departamentosMunicipios";
 
 /** Datos del proveedor para rellenar el formulario (vienen del perfil al abrir desde una request) */
 interface ProviderData {
@@ -64,6 +68,8 @@ export function CreateProviderInvoiceModal({ invoice, onClose, onSuccess }: Prop
     setDepartamento(value);
     setMunicipio("");
   };
+
+  const municipiosDisponibles = departamento ? getMunicipios(departamento) : [];
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -328,24 +334,15 @@ export function CreateProviderInvoiceModal({ invoice, onClose, onSuccess }: Prop
                         required
                       >
                         <option value="">Selecciona</option>
-                        <option value="01">Ahuachapán</option>
-                        <option value="02">Santa Ana</option>
-                        <option value="03">Sonsonate</option>
-                        <option value="04">Chalatenango</option>
-                        <option value="05">La Libertad</option>
-                        <option value="06">San Salvador</option>
-                        <option value="07">Cuscatlán</option>
-                        <option value="08">La Paz</option>
-                        <option value="09">Cabañas</option>
-                        <option value="10">San Vicente</option>
-                        <option value="11">Usulután</option>
-                        <option value="12">San Miguel</option>
-                        <option value="13">Morazán</option>
-                        <option value="14">La Unión</option>
+                        {DEPARTAMENTOS.map((d) => (
+                          <option key={d.value} value={d.value}>
+                            {d.label} ({d.value})
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Municipio *</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Municipio (CAT-013 2024) *</label>
                       <select
                         value={municipio}
                         onChange={(e) => setMunicipio(e.target.value)}
@@ -354,57 +351,11 @@ export function CreateProviderInvoiceModal({ invoice, onClose, onSuccess }: Prop
                         required
                       >
                         <option value="">Selecciona</option>
-                        {departamento === "06" && (
-                          <>
-                            <option value="01">San Salvador</option>
-                            <option value="02">Aguilares</option>
-                            <option value="03">Apopa</option>
-                            <option value="04">Ayutuxtepeque</option>
-                            <option value="05">Cuscatancingo</option>
-                            <option value="06">Delgado</option>
-                            <option value="07">Ilopango</option>
-                            <option value="08">Mejicanos</option>
-                            <option value="09">Nejapa</option>
-                            <option value="10">Panchimalco</option>
-                            <option value="11">Rosario de Mora</option>
-                            <option value="12">San Marcos</option>
-                            <option value="13">San Martín</option>
-                            <option value="14">Santiago Texacuangos</option>
-                            <option value="15">Santo Tomás</option>
-                            <option value="16">Soyapango</option>
-                            <option value="17">Tonacatepeque</option>
-                            <option value="18">Guazapa</option>
-                            <option value="19">San Bartolomé Perulapía</option>
-                          </>
-                        )}
-                        {departamento === "05" && (
-                          <>
-                            <option value="01">Santa Tecla</option>
-                            <option value="02">Antiguo Cuscatlán</option>
-                            <option value="03">Ciudad Arce</option>
-                            <option value="04">Colón</option>
-                            <option value="05">Comasagua</option>
-                            <option value="06">Huizúcar</option>
-                            <option value="07">Jayaque</option>
-                            <option value="08">Jicalapa</option>
-                            <option value="09">La Libertad</option>
-                            <option value="10">Nuevo Cuscatlán</option>
-                            <option value="11">San Juan Opico</option>
-                            <option value="12">Quezaltepeque</option>
-                            <option value="13">Sacacoyo</option>
-                            <option value="14">San José Villanueva</option>
-                            <option value="15">San Matías</option>
-                            <option value="16">San Pablo Tacachico</option>
-                            <option value="17">Tamanique</option>
-                            <option value="18">Talnique</option>
-                            <option value="19">Teotepeque</option>
-                            <option value="20">Tepecoyo</option>
-                            <option value="21">Zaragoza</option>
-                          </>
-                        )}
-                        {departamento && !["05", "06"].includes(departamento) && (
-                          <option value="01">Municipio 01</option>
-                        )}
+                        {municipiosDisponibles.map((m) => (
+                          <option key={m.codigo} value={m.codigo}>
+                            {m.nombre} ({m.codigo})
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div className="md:col-span-2">

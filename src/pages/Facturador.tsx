@@ -572,7 +572,7 @@ export default function Facturador() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Municipio *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Municipio (CAT-013 2024) *</label>
                     <select
                       value={municipio}
                       onChange={(e) => setMunicipio(e.target.value)}

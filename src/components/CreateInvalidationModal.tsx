@@ -14,8 +14,8 @@ interface Invoice {
 
 interface Props {
   invoice: Invoice;
-  /** "billing" = factura a cliente; "provider" = factura a proveedor; "facturador" = factura standalone */
-  invoiceType?: "billing" | "provider" | "facturador";
+  /** "billing" = factura a cliente; "provider" = factura a proveedor; "facturador" = factura standalone; "fse" = factura sujeto excluido */
+  invoiceType?: "billing" | "provider" | "facturador" | "fse";
   onClose: () => void;
   onSuccess: (result?: { sincronizadoYaInvalidadoEnMH?: boolean; advertenciaPersistencia?: string | null }) => void;
 }
@@ -44,10 +44,25 @@ export function CreateInvalidationModal({ invoice, invoiceType = "billing", onCl
     tipoDoc: "13",
     numDoc: "",
   });
+
+  const counterpartName = invoice.fiscal_data?.nombre_completo || invoice.fiscal_data?.nombre || "";
+  const counterpartDoc = (
+    invoice.fiscal_data?.dui ||
+    invoice.fiscal_data?.num_documento ||
+    invoice.fiscal_data?.numDocumento ||
+    invoice.fiscal_data?.nit ||
+    ""
+  ).replace(/[^0-9]/g, "");
+  const counterpartDocType = String(
+    invoice.fiscal_data?.tipo_documento ||
+    invoice.fiscal_data?.tipoDocumento ||
+    "13"
+  );
+
   const [solicitante, setSolicitante] = useState({
-    nombre: "",
-    tipoDoc: "13",
-    numDoc: "",
+    nombre: counterpartName,
+    tipoDoc: counterpartDocType,
+    numDoc: counterpartDoc,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +105,9 @@ export function CreateInvalidationModal({ invoice, invoiceType = "billing", onCl
           ? { provider_invoice_id: docId, providerInvoiceId: docId }
           : invoiceType === "facturador"
             ? { facturador_invoice_id: docId, facturadorInvoiceId: docId }
-            : { billing_id: docId, billingId: docId };
+            : invoiceType === "fse"
+              ? { fse_invoice_id: docId, fseInvoiceId: docId }
+              : { billing_id: docId, billingId: docId };
 
       const response = await fetch(
         `${supabaseUrl}/functions/v1/create-dte-events`,
@@ -170,7 +187,7 @@ export function CreateInvalidationModal({ invoice, invoiceType = "billing", onCl
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <div className="text-xs text-red-600 font-medium uppercase mb-1">
-                      Factura
+                      {invoiceType === "fse" ? "Documento (FSE)" : "Factura"}
                     </div>
                     <div className="font-semibold text-gray-900">
                       {invoice.invoice_number}
@@ -178,10 +195,10 @@ export function CreateInvalidationModal({ invoice, invoiceType = "billing", onCl
                   </div>
                   <div>
                     <div className="text-xs text-red-600 font-medium uppercase mb-1">
-                      Cliente
+                      {invoiceType === "fse" ? "Sujeto Excluido" : invoiceType === "provider" ? "Proveedor" : "Cliente"}
                     </div>
                     <div className="font-semibold text-gray-900 truncate">
-                      {invoice.fiscal_data?.nombre_completo}
+                      {invoice.fiscal_data?.nombre_completo || invoice.fiscal_data?.nombre || "Consumidor Final"}
                     </div>
                   </div>
                   <div>

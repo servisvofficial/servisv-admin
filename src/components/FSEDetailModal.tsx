@@ -8,9 +8,17 @@ import {
 interface FSEDetailModalProps {
   fse: any;
   onClose: () => void;
+  onInvalidate?: (fse: any) => void;
 }
 
-export function FSEDetailModal({ fse, onClose }: FSEDetailModalProps) {
+export function FSEDetailModal({ fse, onClose, onInvalidate }: FSEDetailModalProps) {
+  const isInvalidado = fse.dte_estado === "invalidado" || fse.dte_estado === "anulado";
+  const canInvalidate = Boolean(
+    fse.dte_codigo_generacion &&
+    fse.dte_sello_recepcion &&
+    fse.dte_estado === "procesado" &&
+    !isInvalidado
+  );
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -62,6 +70,18 @@ export function FSEDetailModal({ fse, onClose }: FSEDetailModalProps) {
             </div>
 
             <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              {isInvalidado && (
+                <div className="bg-stone-800 text-stone-100 rounded-xl p-4 text-sm flex items-start gap-3 shadow-md">
+                  <span className="text-xl">⚠️</span>
+                  <div>
+                    <strong className="block text-red-300 font-semibold mb-0.5">
+                      Este DTE fue invalidado
+                    </strong>
+                    El documento tributario ha sido anulado formalmente ante el Ministerio de Hacienda. No posee validez fiscal ni contable.
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
                   <div className="text-xs text-emerald-700 font-medium uppercase tracking-wide mb-1">
@@ -260,10 +280,24 @@ export function FSEDetailModal({ fse, onClose }: FSEDetailModalProps) {
               )}
             </div>
 
-            <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3 flex-shrink-0 border-t">
+            <div className="bg-gray-50 px-6 py-4 flex justify-between items-center flex-shrink-0 border-t">
+              <div>
+                {canInvalidate && onInvalidate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onInvalidate(fse);
+                    }}
+                    className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 text-sm font-medium transition-colors"
+                  >
+                    Invalidar Documento ante MH
+                  </button>
+                )}
+              </div>
               <button
                 onClick={onClose}
-                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm font-medium"
               >
                 Cerrar
               </button>

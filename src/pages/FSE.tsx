@@ -2,12 +2,16 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { CreateFSEModal } from "../components/CreateFSEModal";
 import { FSEDetailModal } from "../components/FSEDetailModal";
+import { CreateInvalidationModal } from "../components/CreateInvalidationModal";
 
 export default function FSE() {
   const [showFseModal, setShowFseModal] = useState(false);
   const [fseInvoices, setFseInvoices] = useState<any[]>([]);
   const [loadingFse, setLoadingFse] = useState(true);
   const [selectedFseForDetail, setSelectedFseForDetail] = useState<any | null>(null);
+  const [showInvalidationModal, setShowInvalidationModal] = useState(false);
+  const [selectedFseForInvalidation, setSelectedFseForInvalidation] = useState<any | null>(null);
+  const [invalidationNotice, setInvalidationNotice] = useState<string | null>(null);
 
   const fetchFseInvoices = async () => {
     setLoadingFse(true);
@@ -48,6 +52,18 @@ export default function FSE() {
           Genera y consulta Facturas de Sujeto Excluido (tipo 14) cuando ServiSV contrata un servicio externo.
         </p>
       </div>
+
+      {invalidationNotice && (
+        <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 shadow-sm flex items-center justify-between">
+          <span>{invalidationNotice}</span>
+          <button
+            onClick={() => setInvalidationNotice(null)}
+            className="text-emerald-700 hover:text-emerald-900 text-xs font-bold ml-4"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <section className="rounded-3xl border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 to-teal-50 p-6 shadow-xl">
         <header className="mb-6">
@@ -114,59 +130,91 @@ export default function FSE() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {fseInvoices.map((fse: any) => (
-                    <tr key={fse.id} className="hover:bg-emerald-50/50">
-                      <td className="px-4 py-3">
-                        <div className="font-mono text-xs text-slate-700">
-                          {fse.dte_codigo_generacion?.substring(0, 8)}...
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {fse.dte_numero_control || "N/A"}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-600">
-                        {fse.dte_fecha_emision ||
-                          new Date(fse.created_at).toLocaleDateString("es-AR")}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="font-semibold text-slate-900">
-                          ${Number(fse.total_compra || 0).toFixed(2)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                            fse.dte_estado === "procesado"
-                              ? "bg-green-100 text-green-800"
-                              : fse.dte_estado === "rechazado"
-                                ? "bg-red-100 text-red-800"
-                                : "bg-yellow-100 text-yellow-800"
-                          }`}
-                        >
-                          {fse.dte_estado || "pendiente"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {fse.dte_sello_recepcion ? (
-                          <span className="font-mono text-xs text-green-700">
-                            ✓ {fse.dte_sello_recepcion.substring(0, 10)}...
+                  {fseInvoices.map((fse: any) => {
+                    const isInvalidado = fse.dte_estado === "invalidado" || fse.dte_estado === "anulado";
+                    const canInvalidate = Boolean(
+                      fse.dte_codigo_generacion &&
+                      fse.dte_sello_recepcion &&
+                      fse.dte_estado === "procesado" &&
+                      !isInvalidado
+                    );
+
+                    return (
+                      <tr key={fse.id} className="hover:bg-emerald-50/50">
+                        <td className="px-4 py-3">
+                          <div className="font-mono text-xs text-slate-700">
+                            {fse.dte_codigo_generacion?.substring(0, 8)}...
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {fse.dte_numero_control || "N/A"}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600">
+                          {fse.dte_fecha_emision ||
+                            new Date(fse.created_at).toLocaleDateString("es-AR")}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="font-semibold text-slate-900">
+                            ${Number(fse.total_compra || 0).toFixed(2)}
                           </span>
-                        ) : (
-                          <span className="text-xs text-slate-400">
-                            Sin sello
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                              isInvalidado
+                                ? "bg-stone-700 text-white"
+                                : fse.dte_estado === "procesado"
+                                  ? "bg-green-100 text-green-800"
+                                  : fse.dte_estado === "rechazado"
+                                    ? "bg-red-100 text-red-800"
+                                    : "bg-yellow-100 text-yellow-800"
+                            }`}
+                          >
+                            {isInvalidado ? "invalidado" : (fse.dte_estado || "pendiente")}
                           </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <button
-                          onClick={() => setSelectedFseForDetail(fse)}
-                          className="text-sm font-medium text-emerald-600 hover:text-emerald-700"
-                        >
-                          Ver detalles
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-4 py-3">
+                          {fse.dte_sello_recepcion ? (
+                            <span className="font-mono text-xs text-green-700">
+                              ✓ {fse.dte_sello_recepcion.substring(0, 10)}...
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-400">
+                              Sin sello
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setSelectedFseForDetail(fse)}
+                              className="text-sm font-medium text-emerald-600 hover:text-emerald-700"
+                            >
+                              Ver detalles
+                            </button>
+                            {isInvalidado && (
+                              <span className="text-xs text-stone-500 font-medium">
+                                Invalidado
+                              </span>
+                            )}
+                            {canInvalidate && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedFseForInvalidation(fse);
+                                  setShowInvalidationModal(true);
+                                }}
+                                className="inline-flex items-center px-2 py-1 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200 transition-colors"
+                                title="Invalidar Documento ante MH"
+                              >
+                                Invalidar
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -189,6 +237,46 @@ export default function FSE() {
         <FSEDetailModal
           fse={selectedFseForDetail}
           onClose={() => setSelectedFseForDetail(null)}
+          onInvalidate={(fse) => {
+            setSelectedFseForInvalidation(fse);
+            setShowInvalidationModal(true);
+          }}
+        />
+      )}
+
+      {showInvalidationModal && selectedFseForInvalidation && (
+        <CreateInvalidationModal
+          invoice={{
+            id: selectedFseForInvalidation.id,
+            invoice_number: selectedFseForInvalidation.dte_numero_control || `FSE-${selectedFseForInvalidation.id.slice(0, 8)}`,
+            invoice_date: selectedFseForInvalidation.dte_fecha_emision || selectedFseForInvalidation.created_at,
+            total_amount: Number(selectedFseForInvalidation.total_compra || 0),
+            fiscal_data: selectedFseForInvalidation.sujeto_excluido || {},
+            dte_codigo_generacion: selectedFseForInvalidation.dte_codigo_generacion,
+            dte_numero_control: selectedFseForInvalidation.dte_numero_control,
+            dte_sello_recepcion: selectedFseForInvalidation.dte_sello_recepcion,
+            dte_tipo_documento: "14",
+          }}
+          invoiceType="fse"
+          onClose={() => {
+            setShowInvalidationModal(false);
+            setSelectedFseForInvalidation(null);
+          }}
+          onSuccess={(result) => {
+            setShowInvalidationModal(false);
+            setSelectedFseForInvalidation(null);
+            if (result?.sincronizadoYaInvalidadoEnMH) {
+              setInvalidationNotice(
+                "Hacienda ya tenía este documento invalidado. Se actualizó el estado en el panel."
+              );
+            } else {
+              setInvalidationNotice(
+                "La FSE fue invalidada exitosamente ante el Ministerio de Hacienda."
+              );
+            }
+            setTimeout(() => setInvalidationNotice(null), 12000);
+            fetchFseInvoices();
+          }}
         />
       )}
     </div>

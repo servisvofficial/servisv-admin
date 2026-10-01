@@ -773,6 +773,27 @@ function redondear(valor: number): number {
   return Number(Math.round(Number(valor + "e2")) + "e-2");
 }
 
+function getElSalvadorDateTimeParts(date: Date = new Date()) {
+  const dateFormatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/El_Salvador",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const timeFormatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/El_Salvador",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+
+  return {
+    date: dateFormatter.format(date),
+    time: timeFormatter.format(date),
+  };
+}
+
 function generarNumeroControl(tipoDte: string, ambiente: Ambiente): string {
   // Formato según MH: DTE-TT-EEEEEEEE-CCCCCCCCCCCCCCC
   // Total: 31 caracteres exactos
@@ -936,9 +957,9 @@ async function generarCreditoFiscal(
   options: GenerarCCFOptions,
   ambiente: Ambiente
 ): Promise<DTE_CreditoFiscal> {
-  const now = new Date();
-  const fecEmi = now.toISOString().split("T")[0];
-  const horEmi = now.toTimeString().split(" ")[0];
+  const svDateTime = getElSalvadorDateTimeParts();
+  const fecEmi = svDateTime.date;
+  const horEmi = svDateTime.time;
   const codigoGeneracion = crypto.randomUUID().toUpperCase();
   const numeroControl = generarNumeroControl("03", ambiente);
 
@@ -1278,9 +1299,9 @@ async function generarFacturaConsumidorFinal(
   options: GenerarCCFOptions,
   ambiente: Ambiente
 ): Promise<DTE_FacturaConsumidorFinal> {
-  const now = new Date();
-  const fecEmi = now.toISOString().split("T")[0];
-  const horEmi = now.toTimeString().split(" ")[0];
+  const svDateTime = getElSalvadorDateTimeParts();
+  const fecEmi = svDateTime.date;
+  const horEmi = svDateTime.time;
   const codigoGeneracion = crypto.randomUUID().toUpperCase();
   const numeroControl = generarNumeroControl("01", ambiente);
 
@@ -1776,8 +1797,9 @@ serve(async (req) => {
         .single();
       if (existingError || !existing) throw new Error("No se encontró la factura para duplicar");
 
-      const invoiceNumber = `FAC-${new Date().toISOString().split("T")[0].replace(/-/g, "")}-${Math.floor(Math.random() * 1000000).toString().padStart(6, "0")}`;
-      const invoiceDate = new Date().toISOString().split("T")[0];
+      const svDate = getElSalvadorDateTimeParts().date;
+      const invoiceNumber = `FAC-${svDate.replace(/-/g, "")}-${Math.floor(Math.random() * 1000000).toString().padStart(6, "0")}`;
+      const invoiceDate = svDate;
 
       const { data: duplicated, error: duplicateError } = await supabase
         .from("facturador_invoices")
@@ -1991,8 +2013,9 @@ serve(async (req) => {
       console.log("DTE no ejecutado. Configure DTE_HABILITADO=true para generar y transmitir.");
     }
 
-    const invoiceNumber = dteNumeroControlProv || `FAC-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(Math.random() * 1000000).toString().padStart(6, "0")}`;
-    const invoiceDate = dteFechaProv || new Date().toISOString().slice(0, 10);
+    const svDate = getElSalvadorDateTimeParts().date;
+    const invoiceNumber = dteNumeroControlProv || `FAC-${svDate.replace(/-/g, "")}-${Math.floor(Math.random() * 1000000).toString().padStart(6, "0")}`;
+    const invoiceDate = dteFechaProv || svDate;
 
     let insertedInvoice: any = null;
     let insertError: any = null;

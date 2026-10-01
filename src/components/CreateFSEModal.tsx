@@ -119,6 +119,21 @@ export function CreateFSEModal({ invoice, onClose, onSuccess }: Props) {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
+      const now = new Date();
+      const fechaEmisionSV = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/El_Salvador",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(now);
+      const horaEmisionSV = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "America/El_Salvador",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      }).format(now);
+
       const response = await fetch(`${supabaseUrl}/functions/v1/create-credit-debit-note`, {
         method: "POST",
         headers: {
@@ -129,6 +144,8 @@ export function CreateFSEModal({ invoice, onClose, onSuccess }: Props) {
         body: JSON.stringify({
           type: "factura_sujeto_excluido",
           billing_id: invoice?.id ?? null,
+          fecha_emision: fechaEmisionSV,
+          hora_emision: horaEmisionSV,
           observaciones: observaciones || null,
           descripcion: descripcion || invoice?.description || null,
           total_compra: total,

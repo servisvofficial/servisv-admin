@@ -211,6 +211,9 @@ export default function Invoices() {
       
       if (row.tipo === "cliente") {
         body.billingId = row.raw.id;
+        body.fiscalData = row.raw.fiscal_data;
+        body.concept = (row.raw as any).description;
+        body.serviceAmount = (row.raw as any).service_amount;
       } else if (row.tipo === "proveedor") {
         endpoint = "create-provider-invoice";
         body.providerInvoiceId = row.raw.id;

@@ -1,65 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { DEPARTAMENTOS, getMunicipios } from "../data/departamentosMunicipios";
-
-// Catálogo de actividades económicas (Ministerio de Hacienda El Salvador)
-const ACTIVIDADES_ECONOMICAS = [
-  { codigo: "20130", descripcion: "FABRICACIÓN DE PLÁSTICO Y CAUCHO EN FORMAS PRIMARIAS" },
-  { codigo: "22110", descripcion: "FABRICACIÓN DE CUBIERTAS Y CÁMARAS DE CAUCHO; RECAUCHUTADO Y RENOVACIÓN DE CUBIERTAS DE CAUCHO" },
-  { codigo: "22190", descripcion: "FABRICACIÓN DE OTROS PRODUCTOS DE CAUCHO" },
-  { codigo: "22201", descripcion: "FABRICACIÓN DE ENVASES PLÁSTICOS Y CAUCHOS" },
-  { codigo: "22202", descripcion: "FABRICACIÓN DE PRODUCTOS PLÁSTICOS PARA USO PERSONAL O DOMÉSTICO" },
-  { codigo: "22208", descripcion: "MAQUILA DE PLÁSTICOS" },
-  { codigo: "22209", descripcion: "FABRICACIÓN DE PRODUCTOS PLÁSTICOS N.C.P." },
-  { codigo: "62010", descripcion: "PORTALES WEB" },
-  { codigo: "62020", descripcion: "DISEÑO Y DESARROLLO DE SOFTWARE" },
-  { codigo: "62090", descripcion: "OTRAS ACTIVIDADES DE TECNOLOGÍA DE LA INFORMACIÓN" },
-  { codigo: "63110", descripcion: "PROCESAMIENTO DE DATOS" },
-  { codigo: "63120", descripcion: "PORTALES WEB Y HOSPEDAJE" },
-  { codigo: "70200", descripcion: "ACTIVIDADES DE CONSULTORÍA DE GESTIÓN" },
-  { codigo: "71100", descripcion: "ACTIVIDADES DE ARQUITECTURA E INGENIERÍA" },
-  { codigo: "73200", descripcion: "ESTUDIOS DE MERCADO Y ENCUESTAS DE OPINIÓN PÚBLICA" },
-  { codigo: "74900", descripcion: "OTRAS ACTIVIDADES PROFESIONALES, CIENTÍFICAS Y TÉCNICAS" },
-  { codigo: "77100", descripcion: "ALQUILER Y ARRENDAMIENTO DE VEHÍCULOS AUTOMOTORES" },
-  { codigo: "77200", descripcion: "ALQUILER DE EFECTOS PERSONALES Y ENSERES DOMÉSTICOS" },
-  { codigo: "77300", descripcion: "ALQUILER DE MAQUINARIA, EQUIPO Y BIENES TANGIBLES" },
-  { codigo: "77400", descripcion: "ARRENDAMIENTO DE PROPIEDAD INTELECTUAL Y SIMILARES" },
-  { codigo: "78100", descripcion: "ACTIVIDADES DE AGENCIAS DE EMPLEO" },
-  { codigo: "78200", descripcion: "ACTIVIDADES DE AGENCIAS DE EMPLEO TEMPORAL" },
-  { codigo: "79100", descripcion: "ACTIVIDADES DE AGENCIAS DE VIAJES" },
-  { codigo: "79900", descripcion: "OTRAS ACTIVIDADES DE SERVICIOS DE RESERVAS Y ACTIVIDADES RELACIONADAS" },
-  { codigo: "80100", descripcion: "ACTIVIDADES DE SEGURIDAD PRIVADA" },
-  { codigo: "80200", descripcion: "ACTIVIDADES DE SERVICIOS DE SISTEMAS DE SEGURIDAD" },
-  { codigo: "80300", descripcion: "ACTIVIDADES DE INVESTIGACIÓN" },
-  { codigo: "82110", descripcion: "ACTIVIDADES COMBINADAS DE APOYO A INSTALACIONES" },
-  { codigo: "82190", descripcion: "OTRAS ACTIVIDADES DE APOYO A EMPRESAS" },
-  { codigo: "82200", descripcion: "ACTIVIDADES DE CENTROS DE LLAMADAS" },
-  { codigo: "82300", descripcion: "ORGANIZACIÓN DE CONVENCIONES Y FERIAS DE MUESTRAS" },
-  { codigo: "82910", descripcion: "ACTIVIDADES DE AGENCIAS DE COBRO Y OFICINAS DE INFORMACIÓN COMERCIAL" },
-  { codigo: "82920", descripcion: "ACTIVIDADES DE ENVASADO Y EMPAQUE" },
-  { codigo: "82990", descripcion: "OTRAS ACTIVIDADES DE APOYO A EMPRESAS N.C.P." },
-  { codigo: "85500", descripcion: "OTRAS ACTIVIDADES DE ENSEÑANZA" },
-  { codigo: "90000", descripcion: "ACTIVIDADES CREATIVAS, ARTÍSTICAS Y DE ENTRETENIMIENTO" },
-  { codigo: "91010", descripcion: "ACTIVIDADES DE BIBLIOTECAS Y ARCHIVOS" },
-  { codigo: "91020", descripcion: "ACTIVIDADES DE MUSEOS Y CONSERVACIÓN DE LUGARES Y EDIFICIOS HISTÓRICOS" },
-  { codigo: "91030", descripcion: "ACTIVIDADES DE JARDINES BOTÁNICOS Y ZOOLÓGICOS Y RESERVAS NATURALES" },
-  { codigo: "92000", descripcion: "ACTIVIDADES DE JUEGOS DE AZAR Y APUESTAS" },
-  { codigo: "93110", descripcion: "GESTIÓN DE INSTALACIONES DEPORTIVAS" },
-  { codigo: "93120", descripcion: "ACTIVIDADES DE CLUBES DEPORTIVOS" },
-  { codigo: "93130", descripcion: "ACTIVIDADES DE GIMNASIOS" },
-  { codigo: "93190", descripcion: "OTRAS ACTIVIDADES DEPORTIVAS" },
-  { codigo: "93210", descripcion: "ACTIVIDADES DE PARQUES DE ATRACCIONES Y PARQUES TEMÁTICOS" },
-  { codigo: "93290", descripcion: "OTRAS ACTIVIDADES DE ESPARCIMIENTO Y RECREATIVAS" },
-  { codigo: "94110", descripcion: "ACTIVIDADES DE ASOCIACIONES EMPRESARIALES Y DE EMPLEADORES" },
-  { codigo: "94120", descripcion: "ACTIVIDADES DE ASOCIACIONES PROFESIONALES" },
-  { codigo: "94200", descripcion: "ACTIVIDADES DE SINDICATOS" },
-  { codigo: "94910", descripcion: "ACTIVIDADES DE ORGANIZACIONES RELIGIOSAS" },
-  { codigo: "94920", descripcion: "ACTIVIDADES DE ORGANIZACIONES POLÍTICAS" },
-  { codigo: "94990", descripcion: "ACTIVIDADES DE OTRAS ORGANIZACIONES DE AFILIACIÓN" },
-  { codigo: "96010", descripcion: "LAVADO Y LIMPIEZA DE PRENDAS DE TELA Y DE PIEL" },
-  { codigo: "96020", descripcion: "PELUQUERÍA Y OTROS TRATAMIENTOS DE BELLEZA" },
-  { codigo: "96030", descripcion: "POMPAS FÚNEBRES Y ACTIVIDADES CONEXAS" },
-  { codigo: "96090", descripcion: "OTRAS ACTIVIDADES DE SERVICIOS PERSONALES" },
-];
+import { ACTIVIDADES_ECONOMICAS } from "../data/actividadesEconomicas";
 
 interface StandaloneInvoiceResult {
   codigoGeneracion: string;
@@ -92,6 +33,7 @@ export default function Facturador() {
   const [nrc, setNrc] = useState("");
   const [codActividad, setCodActividad] = useState("");
   const [descActividad, setDescActividad] = useState("");
+  const [filtroActividad, setFiltroActividad] = useState("");
   const [departamento, setDepartamento] = useState("");
   const [municipio, setMunicipio] = useState("");
   const [direccion, setDireccion] = useState("");
@@ -127,6 +69,18 @@ export default function Facturador() {
   useEffect(() => {
     if (tipoDte === "03") setUsarDatosReceptor(true);
   }, [tipoDte]);
+
+  const actividadesFiltradas = useMemo(() => {
+    if (!filtroActividad.trim()) return ACTIVIDADES_ECONOMICAS;
+    const q = filtroActividad.toLowerCase().trim();
+    return ACTIVIDADES_ECONOMICAS.filter(
+      (a) =>
+        a.codigo.includes(q) ||
+        a.descripcion.toLowerCase().includes(q) ||
+        (a.categoria && a.categoria.toLowerCase().includes(q)) ||
+        a.codigo === codActividad
+    );
+  }, [filtroActividad, codActividad]);
 
   const mostrarFormDatosReceptor = tipoDte === "03" || usarDatosReceptor;
 
@@ -515,22 +469,37 @@ export default function Facturador() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Código de Actividad Económica {tipoDte === "03" ? "*" : "(opcional)"}
                       </label>
-                      <select
-                        value={codActividad}
-                        onChange={(e) => {
-                          const selected = ACTIVIDADES_ECONOMICAS.find(a => a.codigo === e.target.value);
-                          setCodActividad(e.target.value);
-                          setDescActividad(selected?.descripcion || "");
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-violet-500"
-                      >
-                        <option value="">Selecciona una actividad económica</option>
-                        {ACTIVIDADES_ECONOMICAS.map(a => (
-                          <option key={a.codigo} value={a.codigo}>{a.codigo} - {a.descripcion}</option>
-                        ))}
-                      </select>
+                      <div className="space-y-1.5">
+                        <input
+                          type="text"
+                          value={filtroActividad}
+                          onChange={(e) => setFiltroActividad(e.target.value)}
+                          placeholder="Buscar actividad por código, nombre o rubro (ej: 62010, software, publicidad)..."
+                          className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 placeholder:text-gray-400"
+                        />
+                        <select
+                          value={codActividad}
+                          onChange={(e) => {
+                            const selected = ACTIVIDADES_ECONOMICAS.find(a => a.codigo === e.target.value);
+                            setCodActividad(e.target.value);
+                            setDescActividad(selected?.descripcion || "");
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-violet-500"
+                        >
+                          <option value="">
+                            {filtroActividad
+                              ? `Resultados (${actividadesFiltradas.length}) - Selecciona una opción`
+                              : `Selecciona una actividad económica (${ACTIVIDADES_ECONOMICAS.length} disponibles)`}
+                          </option>
+                          {actividadesFiltradas.map(a => (
+                            <option key={a.codigo} value={a.codigo}>
+                              {a.codigo} - {a.descripcion}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <p className="text-xs text-gray-500 mt-1">
-                        {tipoDte === "03" ? "Requerido para Crédito Fiscal (CCF)" : "Opcional para Factura"}
+                        {tipoDte === "03" ? "Requerido para Crédito Fiscal (CCF)" : "Opcional para Factura"} (Catálogo CAT-019 del MH)
                       </p>
                     </div>
                   )}
